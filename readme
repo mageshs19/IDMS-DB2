@@ -1,0 +1,14 @@
+set PYTHONPATH=src
+python -m streamlit run src\idms_modernizer\app.py --server.port 8502
+
+
+.venv\Scripts\Activate
+python -m streamlit run app\streamlit_app.py
+
+python src\tools\audit_hardcoding.py
+
+
+python -m streamlit run app\streamlit_app.py --server.port 8502
+
+
+streamlit run src/idms_modernizer/ui/schema_listing_only_app.py

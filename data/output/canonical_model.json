@@ -1,0 +1,1296 @@
+{
+  "records": [
+    {
+      "name": "COVERAGE",
+      "primary_key": null,
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "SELECTION_DATE_0400",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "TERMINATION_DATE_0400",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "TYPE_0400",
+          "datatype": "CHAR",
+          "length": 1,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "INS_PLAN_CODE_0400",
+          "datatype": "VARCHAR",
+          "length": 3,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "DENTAL_CLAIM",
+      "primary_key": null,
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "CLAIM_DATE_0405",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_BIRTH_DATE_0405",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SERVICE_DATE_0405",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_FIRST_NAME_0405",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_LAST_NAME_0405",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_SEX_0405",
+          "datatype": "CHAR",
+          "length": 1,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "RELATION_TO_EMPLOYEE_0405",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DENTIST_FIRST_NAME_0405",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DENTIST_LAST_NAME_0405",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DENTIST_STREET_0405",
+          "datatype": "VARCHAR",
+          "length": 20,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DENTIST_CITY_0405",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DENTIST_STATE_0405",
+          "datatype": "VARCHAR",
+          "length": 2,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DENTIST_ZIP_FIRST_FIVE_0405",
+          "datatype": "VARCHAR",
+          "length": 5,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DENTIST_ZIP_LAST_FOUR_0405",
+          "datatype": "VARCHAR",
+          "length": 4,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DENTIST_LICENSE_NUMBER_0405",
+          "datatype": "INTEGER",
+          "length": 6,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "NUMBER_OF_PROCEDURES_0405",
+          "datatype": "INTEGER",
+          "length": 2,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "TOOTH_NUMBER_0405",
+          "datatype": "INTEGER",
+          "length": 2,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PROCEDURE_CODE_0405",
+          "datatype": "VARCHAR",
+          "length": 4,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DESCRIPTION_OF_SERVICE_0405",
+          "datatype": "VARCHAR",
+          "length": 60,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "FEE_0405",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "DEPARTMENT",
+      "primary_key": "DEPT_ID_0410",
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "DEPT_ID_0410",
+          "datatype": "INTEGER",
+          "length": 4,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DEPT_NAME_0410",
+          "datatype": "VARCHAR",
+          "length": 45,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DEPT_HEAD_ID_0410",
+          "datatype": "INTEGER",
+          "length": 4,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "EMPLOYEE",
+      "primary_key": "EMP_ID_0415",
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "START_DATE_0415",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "TERMINATION_DATE_0415",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "BIRTH_DATE_0415",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "EMP_ID_0415",
+          "datatype": "INTEGER",
+          "length": 4,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "EMP_FIRST_NAME_0415",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "EMP_LAST_NAME_0415",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "EMP_STREET_0415",
+          "datatype": "VARCHAR",
+          "length": 20,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "EMP_CITY_0415",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "EMP_STATE_0415",
+          "datatype": "VARCHAR",
+          "length": 2,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "EMP_ZIP_FIRST_FIVE_0415",
+          "datatype": "VARCHAR",
+          "length": 5,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "EMP_ZIP_LAST_FOUR_0415",
+          "datatype": "VARCHAR",
+          "length": 4,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "EMP_PHONE_0415",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "STATUS_0415",
+          "datatype": "VARCHAR",
+          "length": 2,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SS_NUMBER_0415",
+          "datatype": "VARCHAR",
+          "length": 9,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "EMPOSITION",
+      "primary_key": null,
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "START_DATE_0420",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "FINISH_DATE_0420",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SALARY_GRADE_0420",
+          "datatype": "INTEGER",
+          "length": 2,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SALARY_AMOUNT_0420",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "BONUS_PERCENT_0420",
+          "datatype": "DECIMAL",
+          "length": 3,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "COMMISSION_PERCENT_0420",
+          "datatype": "DECIMAL",
+          "length": 3,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "OVERTIME_RATE_0420",
+          "datatype": "DECIMAL",
+          "length": 3,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "EXPERTISE",
+      "primary_key": null,
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "EXPERTISE_DATE_0425",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SKILL_LEVEL_0425",
+          "datatype": "VARCHAR",
+          "length": 2,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "HOSPITAL_CLAIM",
+      "primary_key": null,
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "CLAIM_DATE_0430",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_BIRTH_DATE_0430",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "ADMIT_DATE_0430",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DISCHARGE_DATE_0430",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_FIRST_NAME_0430",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_LAST_NAME_0430",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_SEX_0430",
+          "datatype": "CHAR",
+          "length": 1,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "RELATION_TO_EMPLOYEE_0430",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "HOSPITAL_NAME_0430",
+          "datatype": "VARCHAR",
+          "length": 25,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "HOSP_STREET_0430",
+          "datatype": "VARCHAR",
+          "length": 20,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "HOSP_CITY_0430",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "HOSP_STATE_0430",
+          "datatype": "VARCHAR",
+          "length": 2,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "HOSP_ZIP_FIRST_FIVE_0430",
+          "datatype": "VARCHAR",
+          "length": 5,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "HOSP_ZIP_LAST_FOUR_0430",
+          "datatype": "VARCHAR",
+          "length": 4,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DIAGNOSIS_0430",
+          "datatype": "VARCHAR",
+          "length": 120,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "WARD_DAYS_0430",
+          "datatype": "DECIMAL",
+          "length": 3,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "WARD_RATE_0430",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "WARD_TOTAL_0430",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SEMI_DAYS_0430",
+          "datatype": "DECIMAL",
+          "length": 3,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SEMI_RATE_0430",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SEMI_TOTAL_0430",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DELIVERY_COST_0430",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "ANESTHESIA_COST_0430",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "LAB_COST_0430",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "INSURANCE_PLAN",
+      "primary_key": "INS_PLAN_CODE_0435",
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "INS_PLAN_CODE_0435",
+          "datatype": "VARCHAR",
+          "length": 3,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "INS_CO_NAME_0435",
+          "datatype": "VARCHAR",
+          "length": 45,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "INS_CO_STREET_0435",
+          "datatype": "VARCHAR",
+          "length": 20,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "INS_CO_CITY_0435",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "INS_CO_STATE_0435",
+          "datatype": "VARCHAR",
+          "length": 2,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "INS_CO_ZIP_FIRST_FIVE_0435",
+          "datatype": "VARCHAR",
+          "length": 5,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "INS_CO_ZIP_LAST_FOUR_0435",
+          "datatype": "VARCHAR",
+          "length": 4,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "INS_CO_PHONE_0435",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "GROUP_NUMBER_0435",
+          "datatype": "INTEGER",
+          "length": 6,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DEDUCT_0435",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "MAXIMUM_LIFE_COST_0435",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "FAMILY_COST_0435",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DEP_COST_0435",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "JOB",
+      "primary_key": "JOB_ID_0440",
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "JOB_ID_0440",
+          "datatype": "INTEGER",
+          "length": 4,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "TITLE_0440",
+          "datatype": "VARCHAR",
+          "length": 20,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DESCRIPTION_LINE_0440",
+          "datatype": "VARCHAR",
+          "length": 120,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "REQUIREMENT_LINE_0440",
+          "datatype": "VARCHAR",
+          "length": 120,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "MINIMUM_SALARY_0440",
+          "datatype": "INTEGER",
+          "length": 8,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "MAXIMUM_SALARY_0440",
+          "datatype": "INTEGER",
+          "length": 8,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SALARY_GRADES_0440",
+          "datatype": "INTEGER",
+          "length": 8,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "NUMBER_OF_POSITIONS_0440",
+          "datatype": "INTEGER",
+          "length": 3,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "NUMBER_OPEN_0440",
+          "datatype": "INTEGER",
+          "length": 3,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "NON_HOSP_CLAIM",
+      "primary_key": null,
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "CLAIM_DATE_0445",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_BIRTH_DATE_0445",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SERVICE_DATE_0445",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_FIRST_NAME_0445",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_LAST_NAME_0445",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PATIENT_SEX_0445",
+          "datatype": "CHAR",
+          "length": 1,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "RELATION_TO_EMPLOYEE_0445",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PHYSICIAN_FIRST_NAME_0445",
+          "datatype": "VARCHAR",
+          "length": 10,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PHYSICIAN_LAST_NAME_0445",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PHYSICIAN_STREET_0445",
+          "datatype": "VARCHAR",
+          "length": 20,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PHYSICIAN_CITY_0445",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PHYSICIAN_STATE_0445",
+          "datatype": "VARCHAR",
+          "length": 2,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PHYSICIAN_ZIP_FIRST_FIVE_0445",
+          "datatype": "VARCHAR",
+          "length": 5,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PHYSICIAN_ZIP_LAST_FOUR_0445",
+          "datatype": "VARCHAR",
+          "length": 4,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PHYSICIAN_ID_0445",
+          "datatype": "INTEGER",
+          "length": 6,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DIAGNOSIS_0445",
+          "datatype": "VARCHAR",
+          "length": 120,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "NUMBER_OF_PROCEDURES_0445",
+          "datatype": "INTEGER",
+          "length": 2,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "PROCEDURE_CODE_0445",
+          "datatype": "VARCHAR",
+          "length": 4,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "DESCRIPTION_OF_SERVICE_0445",
+          "datatype": "VARCHAR",
+          "length": 60,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "FEE_0445",
+          "datatype": "DECIMAL",
+          "length": 5,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "OFFICE",
+      "primary_key": "OFFICE_CODE_0450",
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "OFFICE_CODE_0450",
+          "datatype": "VARCHAR",
+          "length": 3,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "OFFICE_STREET_0450",
+          "datatype": "VARCHAR",
+          "length": 20,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "OFFICE_CITY_0450",
+          "datatype": "VARCHAR",
+          "length": 15,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "OFFICE_STATE_0450",
+          "datatype": "VARCHAR",
+          "length": 2,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "OFFICE_ZIP_FIRST_FIVE_0450",
+          "datatype": "VARCHAR",
+          "length": 5,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "OFFICE_ZIP_LAST_FOUR_0450",
+          "datatype": "VARCHAR",
+          "length": 4,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "OFFICE_PHONE_0450",
+          "datatype": "VARCHAR",
+          "length": 21,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "OFFICE_AREA_CODE_0450",
+          "datatype": "VARCHAR",
+          "length": 3,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SPEED_DIAL_0450",
+          "datatype": "VARCHAR",
+          "length": 3,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "SKILL",
+      "primary_key": "SKILL_ID_0455",
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "SKILL_ID_0455",
+          "datatype": "INTEGER",
+          "length": 4,
+          "scale": 0,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SKILL_NAME_0455",
+          "datatype": "VARCHAR",
+          "length": 12,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "SKILL_DESCRIPTION_0455",
+          "datatype": "VARCHAR",
+          "length": 60,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    },
+    {
+      "name": "STRUCTURE",
+      "primary_key": null,
+      "record_id": null,
+      "location_mode": null,
+      "fields": [
+        {
+          "name": "STRUCTURE_DATE_0460",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        },
+        {
+          "name": "STRUCTURE_CODE_0460",
+          "datatype": "VARCHAR",
+          "length": 2,
+          "scale": null,
+          "occurs": false,
+          "occurs_max": null
+        }
+      ]
+    }
+  ],
+  "sets": [
+    {
+      "name": "SKILL-EXPERTISE",
+      "owner_record": "SKILL",
+      "member_record": "EXPERTISE",
+      "order_mode": null
+    },
+    {
+      "name": "EMP-EMPOSITION",
+      "owner_record": "EMPLOYEE",
+      "member_record": "EMPOSITION",
+      "order_mode": null
+    },
+    {
+      "name": "OFFICE-EMPLOYEE",
+      "owner_record": "OFFICE",
+      "member_record": "EMPLOYEE",
+      "order_mode": null
+    },
+    {
+      "name": "JOB-EMPOSITION",
+      "owner_record": "JOB",
+      "member_record": "EMPOSITION",
+      "order_mode": null
+    },
+    {
+      "name": "MANAGES",
+      "owner_record": "EMPLOYEE",
+      "member_record": "STRUCTURE",
+      "order_mode": null
+    },
+    {
+      "name": "DEPT-EMPLOYEE",
+      "owner_record": "DEPARTMENT",
+      "member_record": "EMPLOYEE",
+      "order_mode": null
+    },
+    {
+      "name": "EMP-EXPERTISE",
+      "owner_record": "EMPLOYEE",
+      "member_record": "EXPERTISE",
+      "order_mode": null
+    },
+    {
+      "name": "REPORTS-TO",
+      "owner_record": "EMPLOYEE",
+      "member_record": "STRUCTURE",
+      "order_mode": null
+    },
+    {
+      "name": "EMP-COVERAGE",
+      "owner_record": "EMPLOYEE",
+      "member_record": "COVERAGE",
+      "order_mode": null
+    },
+    {
+      "name": "COVERAGE-CLAIMS",
+      "owner_record": "COVERAGE",
+      "member_record": "DENTAL_CLAIM",
+      "order_mode": null
+    },
+    {
+      "name": "COVERAGE-CLAIMS",
+      "owner_record": "COVERAGE",
+      "member_record": "HOSPITAL_CLAIM",
+      "order_mode": null
+    },
+    {
+      "name": "COVERAGE-CLAIMS",
+      "owner_record": "COVERAGE",
+      "member_record": "NON_HOSP_CLAIM",
+      "order_mode": null
+    }
+  ],
+  "relationships": [
+    {
+      "set_name": "SKILL-EXPERTISE",
+      "parent_record": "SKILL",
+      "child_record": "EXPERTISE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "EMP-EMPOSITION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EMPOSITION",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "OFFICE-EMPLOYEE",
+      "parent_record": "OFFICE",
+      "child_record": "EMPLOYEE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "JOB-EMPOSITION",
+      "parent_record": "JOB",
+      "child_record": "EMPOSITION",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "MANAGES",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "DEPT-EMPLOYEE",
+      "parent_record": "DEPARTMENT",
+      "child_record": "EMPLOYEE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "EMP-EXPERTISE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EXPERTISE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "REPORTS-TO",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "EMP-COVERAGE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "COVERAGE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "COVERAGE-CLAIMS",
+      "parent_record": "COVERAGE",
+      "child_record": "DENTAL_CLAIM",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "COVERAGE-CLAIMS",
+      "parent_record": "COVERAGE",
+      "child_record": "HOSPITAL_CLAIM",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "COVERAGE-CLAIMS",
+      "parent_record": "COVERAGE",
+      "child_record": "NON_HOSP_CLAIM",
+      "cardinality": "1:N"
+    }
+  ]
+}

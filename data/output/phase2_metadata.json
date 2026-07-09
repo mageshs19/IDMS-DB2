@@ -1,0 +1,3654 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-07-08T10:35:15.266800Z",
+  "source": "PHASE1",
+  "schema_source": "PHASE1_CANONICAL_DB2_METADATA",
+  "record_table_map": {
+    "COVERAGE": "COVERAGE",
+    "DENTAL_CLAIM": "DENTAL_CLAIM",
+    "DEPARTMENT": "DEPARTMENT",
+    "EMPLOYEE": "EMPLOYEE",
+    "EMPOSITION": "EMPOSITION",
+    "EXPERTISE": "EXPERTISE",
+    "HOSPITAL_CLAIM": "HOSPITAL_CLAIM",
+    "INSURANCE_PLAN": "INSURANCE_PLAN",
+    "JOB": "JOB",
+    "NON_HOSP_CLAIM": "NON_HOSP_CLAIM",
+    "OFFICE": "OFFICE",
+    "SKILL": "SKILL",
+    "STRUCTURE": "STRUCTURE"
+  },
+  "records": [
+    {
+      "name": "COVERAGE",
+      "table": "COVERAGE",
+      "primary_key": "COVERAGE_ID",
+      "fields": [
+        {
+          "name": "COVERAGE_ID",
+          "column": "COVERAGE_ID",
+          "datatype": "BIGINT",
+          "length": 18,
+          "scale": 0,
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "SELECTION_DATE_0400",
+          "column": "SELECTION_DATE_0400",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "TERMINATION_DATE_0400",
+          "column": "TERMINATION_DATE_0400",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "TYPE_0400",
+          "column": "TYPE_0400",
+          "datatype": "CHAR(1)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "INS_PLAN_CODE_0400",
+          "column": "INS_PLAN_CODE_0400",
+          "datatype": "VARCHAR(3)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_ID_0415",
+          "column": "EMP_ID_0415",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "primary_key": null,
+      "fields": [
+        {
+          "name": "CLAIM_DATE_0405",
+          "column": "CLAIM_DATE_0405",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_BIRTH_DATE_0405",
+          "column": "PATIENT_BIRTH_DATE_0405",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SERVICE_DATE_0405",
+          "column": "SERVICE_DATE_0405",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_FIRST_NAME_0405",
+          "column": "PATIENT_FIRST_NAME_0405",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_LAST_NAME_0405",
+          "column": "PATIENT_LAST_NAME_0405",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_SEX_0405",
+          "column": "PATIENT_SEX_0405",
+          "datatype": "CHAR(1)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "RELATION_TO_EMPLOYEE_0405",
+          "column": "RELATION_TO_EMPLOYEE_0405",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DENTIST_FIRST_NAME_0405",
+          "column": "DENTIST_FIRST_NAME_0405",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DENTIST_LAST_NAME_0405",
+          "column": "DENTIST_LAST_NAME_0405",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DENTIST_STREET_0405",
+          "column": "DENTIST_STREET_0405",
+          "datatype": "VARCHAR(20)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DENTIST_CITY_0405",
+          "column": "DENTIST_CITY_0405",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DENTIST_STATE_0405",
+          "column": "DENTIST_STATE_0405",
+          "datatype": "VARCHAR(2)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DENTIST_ZIP_FIRST_FIVE_0405",
+          "column": "DENTIST_ZIP_FIRST_FIVE_0405",
+          "datatype": "VARCHAR(5)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DENTIST_ZIP_LAST_FOUR_0405",
+          "column": "DENTIST_ZIP_LAST_FOUR_0405",
+          "datatype": "VARCHAR(4)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DENTIST_LICENSE_NUMBER_0405",
+          "column": "DENTIST_LICENSE_NUMBER_0405",
+          "datatype": "VARCHAR(6)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "NUMBER_OF_PROCEDURES_0405",
+          "column": "NUMBER_OF_PROCEDURES_0405",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "TOOTH_NUMBER_0405",
+          "column": "TOOTH_NUMBER_0405",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PROCEDURE_CODE_0405",
+          "column": "PROCEDURE_CODE_0405",
+          "datatype": "VARCHAR(4)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DESCRIPTION_OF_SERVICE_0405",
+          "column": "DESCRIPTION_OF_SERVICE_0405",
+          "datatype": "VARCHAR(60)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "FEE_0405",
+          "column": "FEE_0405",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "COVERAGE_ID",
+          "column": "COVERAGE_ID",
+          "datatype": "BIGINT",
+          "length": 18,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "DEPARTMENT",
+      "table": "DEPARTMENT",
+      "primary_key": "DEPT_ID_0410",
+      "fields": [
+        {
+          "name": "DEPT_ID_0410",
+          "column": "DEPT_ID_0410",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "DEPT_NAME_0410",
+          "column": "DEPT_NAME_0410",
+          "datatype": "VARCHAR(45)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DEPT_HEAD_ID_0410",
+          "column": "DEPT_HEAD_ID_0410",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "primary_key": "EMP_ID_0415",
+      "fields": [
+        {
+          "name": "START_DATE_0415",
+          "column": "START_DATE_0415",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "TERMINATION_DATE_0415",
+          "column": "TERMINATION_DATE_0415",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "BIRTH_DATE_0415",
+          "column": "BIRTH_DATE_0415",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_ID_0415",
+          "column": "EMP_ID_0415",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "EMP_FIRST_NAME_0415",
+          "column": "EMP_FIRST_NAME_0415",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_LAST_NAME_0415",
+          "column": "EMP_LAST_NAME_0415",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_STREET_0415",
+          "column": "EMP_STREET_0415",
+          "datatype": "VARCHAR(20)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_CITY_0415",
+          "column": "EMP_CITY_0415",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_STATE_0415",
+          "column": "EMP_STATE_0415",
+          "datatype": "VARCHAR(2)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_ZIP_FIRST_FIVE_0415",
+          "column": "EMP_ZIP_FIRST_FIVE_0415",
+          "datatype": "VARCHAR(5)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_ZIP_LAST_FOUR_0415",
+          "column": "EMP_ZIP_LAST_FOUR_0415",
+          "datatype": "VARCHAR(4)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_PHONE_0415",
+          "column": "EMP_PHONE_0415",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "STATUS_0415",
+          "column": "STATUS_0415",
+          "datatype": "VARCHAR(2)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SS_NUMBER_0415",
+          "column": "SS_NUMBER_0415",
+          "datatype": "VARCHAR(9)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "OFFICE_CODE_0450",
+          "column": "OFFICE_CODE_0450",
+          "datatype": "VARCHAR(3)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DEPT_ID_0410",
+          "column": "DEPT_ID_0410",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "EMPOSITION",
+      "table": "EMPOSITION",
+      "primary_key": null,
+      "fields": [
+        {
+          "name": "START_DATE_0420",
+          "column": "START_DATE_0420",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "FINISH_DATE_0420",
+          "column": "FINISH_DATE_0420",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SALARY_GRADE_0420",
+          "column": "SALARY_GRADE_0420",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SALARY_AMOUNT_0420",
+          "column": "SALARY_AMOUNT_0420",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "BONUS_PERCENT_0420",
+          "column": "BONUS_PERCENT_0420",
+          "datatype": "DECIMAL(3,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "COMMISSION_PERCENT_0420",
+          "column": "COMMISSION_PERCENT_0420",
+          "datatype": "DECIMAL(3,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "OVERTIME_RATE_0420",
+          "column": "OVERTIME_RATE_0420",
+          "datatype": "DECIMAL(3,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_ID_0415",
+          "column": "EMP_ID_0415",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "JOB_ID_0440",
+          "column": "JOB_ID_0440",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "EXPERTISE",
+      "table": "EXPERTISE",
+      "primary_key": null,
+      "fields": [
+        {
+          "name": "EXPERTISE_DATE_0425",
+          "column": "EXPERTISE_DATE_0425",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SKILL_LEVEL_0425",
+          "column": "SKILL_LEVEL_0425",
+          "datatype": "VARCHAR(2)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SKILL_ID_0455",
+          "column": "SKILL_ID_0455",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "EMP_ID_0415",
+          "column": "EMP_ID_0415",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "primary_key": null,
+      "fields": [
+        {
+          "name": "CLAIM_DATE_0430",
+          "column": "CLAIM_DATE_0430",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_BIRTH_DATE_0430",
+          "column": "PATIENT_BIRTH_DATE_0430",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "ADMIT_DATE_0430",
+          "column": "ADMIT_DATE_0430",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DISCHARGE_DATE_0430",
+          "column": "DISCHARGE_DATE_0430",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_FIRST_NAME_0430",
+          "column": "PATIENT_FIRST_NAME_0430",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_LAST_NAME_0430",
+          "column": "PATIENT_LAST_NAME_0430",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_SEX_0430",
+          "column": "PATIENT_SEX_0430",
+          "datatype": "CHAR(1)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "RELATION_TO_EMPLOYEE_0430",
+          "column": "RELATION_TO_EMPLOYEE_0430",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "HOSPITAL_NAME_0430",
+          "column": "HOSPITAL_NAME_0430",
+          "datatype": "VARCHAR(25)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "HOSP_STREET_0430",
+          "column": "HOSP_STREET_0430",
+          "datatype": "VARCHAR(20)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "HOSP_CITY_0430",
+          "column": "HOSP_CITY_0430",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "HOSP_STATE_0430",
+          "column": "HOSP_STATE_0430",
+          "datatype": "VARCHAR(2)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "HOSP_ZIP_FIRST_FIVE_0430",
+          "column": "HOSP_ZIP_FIRST_FIVE_0430",
+          "datatype": "VARCHAR(5)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "HOSP_ZIP_LAST_FOUR_0430",
+          "column": "HOSP_ZIP_LAST_FOUR_0430",
+          "datatype": "VARCHAR(4)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DIAGNOSIS_0430",
+          "column": "DIAGNOSIS_0430",
+          "datatype": "VARCHAR(120)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "WARD_DAYS_0430",
+          "column": "WARD_DAYS_0430",
+          "datatype": "DECIMAL(3,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "WARD_RATE_0430",
+          "column": "WARD_RATE_0430",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "WARD_TOTAL_0430",
+          "column": "WARD_TOTAL_0430",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SEMI_DAYS_0430",
+          "column": "SEMI_DAYS_0430",
+          "datatype": "DECIMAL(3,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SEMI_RATE_0430",
+          "column": "SEMI_RATE_0430",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SEMI_TOTAL_0430",
+          "column": "SEMI_TOTAL_0430",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DELIVERY_COST_0430",
+          "column": "DELIVERY_COST_0430",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "ANESTHESIA_COST_0430",
+          "column": "ANESTHESIA_COST_0430",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "LAB_COST_0430",
+          "column": "LAB_COST_0430",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "COVERAGE_ID",
+          "column": "COVERAGE_ID",
+          "datatype": "BIGINT",
+          "length": 18,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "primary_key": "INS_PLAN_CODE_0435",
+      "fields": [
+        {
+          "name": "INS_PLAN_CODE_0435",
+          "column": "INS_PLAN_CODE_0435",
+          "datatype": "VARCHAR(3)",
+          "length": null,
+          "scale": null,
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "INS_CO_NAME_0435",
+          "column": "INS_CO_NAME_0435",
+          "datatype": "VARCHAR(45)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "INS_CO_STREET_0435",
+          "column": "INS_CO_STREET_0435",
+          "datatype": "VARCHAR(20)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "INS_CO_CITY_0435",
+          "column": "INS_CO_CITY_0435",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "INS_CO_STATE_0435",
+          "column": "INS_CO_STATE_0435",
+          "datatype": "VARCHAR(2)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "INS_CO_ZIP_FIRST_FIVE_0435",
+          "column": "INS_CO_ZIP_FIRST_FIVE_0435",
+          "datatype": "VARCHAR(5)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "INS_CO_ZIP_LAST_FOUR_0435",
+          "column": "INS_CO_ZIP_LAST_FOUR_0435",
+          "datatype": "VARCHAR(4)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "INS_CO_PHONE_0435",
+          "column": "INS_CO_PHONE_0435",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "GROUP_NUMBER_0435",
+          "column": "GROUP_NUMBER_0435",
+          "datatype": "INTEGER",
+          "length": 9,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DEDUCT_0435",
+          "column": "DEDUCT_0435",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "MAXIMUM_LIFE_COST_0435",
+          "column": "MAXIMUM_LIFE_COST_0435",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "FAMILY_COST_0435",
+          "column": "FAMILY_COST_0435",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DEP_COST_0435",
+          "column": "DEP_COST_0435",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "JOB",
+      "table": "JOB",
+      "primary_key": "JOB_ID_0440",
+      "fields": [
+        {
+          "name": "JOB_ID_0440",
+          "column": "JOB_ID_0440",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "TITLE_0440",
+          "column": "TITLE_0440",
+          "datatype": "VARCHAR(20)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DESCRIPTION_LINE_0440",
+          "column": "DESCRIPTION_LINE_0440",
+          "datatype": "VARCHAR(120)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "REQUIREMENT_LINE_0440",
+          "column": "REQUIREMENT_LINE_0440",
+          "datatype": "VARCHAR(120)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "MINIMUM_SALARY_0440",
+          "column": "MINIMUM_SALARY_0440",
+          "datatype": "INTEGER",
+          "length": 9,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "MAXIMUM_SALARY_0440",
+          "column": "MAXIMUM_SALARY_0440",
+          "datatype": "INTEGER",
+          "length": 9,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SALARY_GRADES_0440",
+          "column": "SALARY_GRADES_0440",
+          "datatype": "INTEGER",
+          "length": 9,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "NUMBER_OF_POSITIONS_0440",
+          "column": "NUMBER_OF_POSITIONS_0440",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "NUMBER_OPEN_0440",
+          "column": "NUMBER_OPEN_0440",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "primary_key": null,
+      "fields": [
+        {
+          "name": "CLAIM_DATE_0445",
+          "column": "CLAIM_DATE_0445",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_BIRTH_DATE_0445",
+          "column": "PATIENT_BIRTH_DATE_0445",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SERVICE_DATE_0445",
+          "column": "SERVICE_DATE_0445",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_FIRST_NAME_0445",
+          "column": "PATIENT_FIRST_NAME_0445",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_LAST_NAME_0445",
+          "column": "PATIENT_LAST_NAME_0445",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PATIENT_SEX_0445",
+          "column": "PATIENT_SEX_0445",
+          "datatype": "CHAR(1)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "RELATION_TO_EMPLOYEE_0445",
+          "column": "RELATION_TO_EMPLOYEE_0445",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PHYSICIAN_FIRST_NAME_0445",
+          "column": "PHYSICIAN_FIRST_NAME_0445",
+          "datatype": "VARCHAR(10)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PHYSICIAN_LAST_NAME_0445",
+          "column": "PHYSICIAN_LAST_NAME_0445",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PHYSICIAN_STREET_0445",
+          "column": "PHYSICIAN_STREET_0445",
+          "datatype": "VARCHAR(20)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PHYSICIAN_CITY_0445",
+          "column": "PHYSICIAN_CITY_0445",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PHYSICIAN_STATE_0445",
+          "column": "PHYSICIAN_STATE_0445",
+          "datatype": "VARCHAR(2)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PHYSICIAN_ZIP_FIRST_FIVE_0445",
+          "column": "PHYSICIAN_ZIP_FIRST_FIVE_0445",
+          "datatype": "VARCHAR(5)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PHYSICIAN_ZIP_LAST_FOUR_0445",
+          "column": "PHYSICIAN_ZIP_LAST_FOUR_0445",
+          "datatype": "VARCHAR(4)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PHYSICIAN_ID_0445",
+          "column": "PHYSICIAN_ID_0445",
+          "datatype": "INTEGER",
+          "length": 9,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DIAGNOSIS_0445",
+          "column": "DIAGNOSIS_0445",
+          "datatype": "VARCHAR(120)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "NUMBER_OF_PROCEDURES_0445",
+          "column": "NUMBER_OF_PROCEDURES_0445",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "PROCEDURE_CODE_0445",
+          "column": "PROCEDURE_CODE_0445",
+          "datatype": "VARCHAR(4)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "DESCRIPTION_OF_SERVICE_0445",
+          "column": "DESCRIPTION_OF_SERVICE_0445",
+          "datatype": "VARCHAR(60)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "FEE_0445",
+          "column": "FEE_0445",
+          "datatype": "DECIMAL(5,0)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "COVERAGE_ID",
+          "column": "COVERAGE_ID",
+          "datatype": "BIGINT",
+          "length": 18,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "OFFICE",
+      "table": "OFFICE",
+      "primary_key": "OFFICE_CODE_0450",
+      "fields": [
+        {
+          "name": "OFFICE_CODE_0450",
+          "column": "OFFICE_CODE_0450",
+          "datatype": "VARCHAR(3)",
+          "length": null,
+          "scale": null,
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "OFFICE_STREET_0450",
+          "column": "OFFICE_STREET_0450",
+          "datatype": "VARCHAR(20)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "OFFICE_CITY_0450",
+          "column": "OFFICE_CITY_0450",
+          "datatype": "VARCHAR(15)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "OFFICE_STATE_0450",
+          "column": "OFFICE_STATE_0450",
+          "datatype": "VARCHAR(2)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "OFFICE_ZIP_FIRST_FIVE_0450",
+          "column": "OFFICE_ZIP_FIRST_FIVE_0450",
+          "datatype": "VARCHAR(5)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "OFFICE_ZIP_LAST_FOUR_0450",
+          "column": "OFFICE_ZIP_LAST_FOUR_0450",
+          "datatype": "VARCHAR(4)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "OFFICE_PHONE_0450",
+          "column": "OFFICE_PHONE_0450",
+          "datatype": "VARCHAR(21)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "OFFICE_AREA_CODE_0450",
+          "column": "OFFICE_AREA_CODE_0450",
+          "datatype": "VARCHAR(3)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SPEED_DIAL_0450",
+          "column": "SPEED_DIAL_0450",
+          "datatype": "VARCHAR(3)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "SKILL",
+      "table": "SKILL",
+      "primary_key": "SKILL_ID_0455",
+      "fields": [
+        {
+          "name": "SKILL_ID_0455",
+          "column": "SKILL_ID_0455",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "SKILL_NAME_0455",
+          "column": "SKILL_NAME_0455",
+          "datatype": "VARCHAR(12)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "SKILL_DESCRIPTION_0455",
+          "column": "SKILL_DESCRIPTION_0455",
+          "datatype": "VARCHAR(60)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "STRUCTURE",
+      "table": "STRUCTURE",
+      "primary_key": null,
+      "fields": [
+        {
+          "name": "STRUCTURE_DATE_0460",
+          "column": "STRUCTURE_DATE_0460",
+          "datatype": "DATE",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "STRUCTURE_CODE_0460",
+          "column": "STRUCTURE_CODE_0460",
+          "datatype": "VARCHAR(2)",
+          "length": null,
+          "scale": null,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "MANAGES_EMP_ID_0415",
+          "column": "MANAGES_EMP_ID_0415",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "REPORTS_TO_EMP_ID_0415",
+          "column": "REPORTS_TO_EMP_ID_0415",
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "set_name": "SKILL_EXPERTISE",
+      "parent_record": "SKILL",
+      "child_record": "EXPERTISE",
+      "parent_key": "SKILL_ID_0455",
+      "child_fk": "SKILL_ID_0455",
+      "cardinality": "1:N",
+      "order_by": [
+        "SKILL_ID_0455"
+      ]
+    },
+    {
+      "set_name": "EMP_EMPOSITION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EMPOSITION",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "cardinality": "1:N",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    {
+      "set_name": "OFFICE_EMPLOYEE",
+      "parent_record": "OFFICE",
+      "child_record": "EMPLOYEE",
+      "parent_key": "OFFICE_CODE_0450",
+      "child_fk": "OFFICE_CODE_0450",
+      "cardinality": "1:N",
+      "order_by": [
+        "OFFICE_CODE_0450"
+      ]
+    },
+    {
+      "set_name": "JOB_EMPOSITION",
+      "parent_record": "JOB",
+      "child_record": "EMPOSITION",
+      "parent_key": "JOB_ID_0440",
+      "child_fk": "JOB_ID_0440",
+      "cardinality": "1:N",
+      "order_by": [
+        "JOB_ID_0440"
+      ]
+    },
+    {
+      "set_name": "MANAGES",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "cardinality": "1:N",
+      "order_by": []
+    },
+    {
+      "set_name": "DEPT_EMPLOYEE",
+      "parent_record": "DEPARTMENT",
+      "child_record": "EMPLOYEE",
+      "parent_key": "DEPT_ID_0410",
+      "child_fk": "DEPT_ID_0410",
+      "cardinality": "1:N",
+      "order_by": [
+        "DEPT_ID_0410"
+      ]
+    },
+    {
+      "set_name": "EMP_EXPERTISE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EXPERTISE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "cardinality": "1:N",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    {
+      "set_name": "REPORTS_TO",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "cardinality": "1:N",
+      "order_by": []
+    },
+    {
+      "set_name": "EMP_COVERAGE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "COVERAGE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "cardinality": "1:N",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    {
+      "set_name": "COVERAGE_CLAIMS",
+      "parent_record": "COVERAGE",
+      "child_record": "DENTAL_CLAIM",
+      "parent_key": "COVERAGE_ID",
+      "child_fk": "COVERAGE_ID",
+      "cardinality": "1:N",
+      "order_by": [
+        "COVERAGE_ID"
+      ]
+    },
+    {
+      "set_name": "COVERAGE_CLAIMS",
+      "parent_record": "COVERAGE",
+      "child_record": "HOSPITAL_CLAIM",
+      "parent_key": "COVERAGE_ID",
+      "child_fk": "COVERAGE_ID",
+      "cardinality": "1:N",
+      "order_by": [
+        "COVERAGE_ID"
+      ]
+    },
+    {
+      "set_name": "COVERAGE_CLAIMS",
+      "parent_record": "COVERAGE",
+      "child_record": "NON_HOSP_CLAIM",
+      "parent_key": "COVERAGE_ID",
+      "child_fk": "COVERAGE_ID",
+      "cardinality": "1:N",
+      "order_by": [
+        "COVERAGE_ID"
+      ]
+    }
+  ],
+  "field_map": {
+    "TYPE_0400": {
+      "host": "HV-COVERAGE-TYPE",
+      "record": "COVERAGE",
+      "table": "COVERAGE",
+      "column": "TYPE_0400",
+      "legacy_field": "TYPE_0400"
+    },
+    "TYPE": {
+      "host": "HV-COVERAGE-TYPE",
+      "record": "COVERAGE",
+      "table": "COVERAGE",
+      "column": "TYPE_0400",
+      "legacy_field": "TYPE_0400"
+    },
+    "INS_PLAN_CODE_0400": {
+      "host": "HV-COVERAGE-INS-PLAN-CODE",
+      "record": "COVERAGE",
+      "table": "COVERAGE",
+      "column": "INS_PLAN_CODE_0400",
+      "legacy_field": "INS_PLAN_CODE_0400"
+    },
+    "INS_PLAN_CODE": {
+      "host": "HV-INSURANCE-PLAN-INS-PLAN-CODE",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_PLAN_CODE_0435",
+      "legacy_field": "INS_PLAN_CODE_0435"
+    },
+    "PATIENT_FIRST_NAME_0405": {
+      "host": "HV-DENTAL-CLAIM-PATIENT-FIRST-NAME",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "PATIENT_FIRST_NAME_0405",
+      "legacy_field": "PATIENT_FIRST_NAME_0405"
+    },
+    "PATIENT_FIRST_NAME": {
+      "host": "HV-NON-HOSP-CLAIM-PATIENT-FIRST-NAME",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PATIENT_FIRST_NAME_0445",
+      "legacy_field": "PATIENT_FIRST_NAME_0445"
+    },
+    "PATIENT_LAST_NAME_0405": {
+      "host": "HV-DENTAL-CLAIM-PATIENT-LAST-NAME",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "PATIENT_LAST_NAME_0405",
+      "legacy_field": "PATIENT_LAST_NAME_0405"
+    },
+    "PATIENT_LAST_NAME": {
+      "host": "HV-NON-HOSP-CLAIM-PATIENT-LAST-NAME",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PATIENT_LAST_NAME_0445",
+      "legacy_field": "PATIENT_LAST_NAME_0445"
+    },
+    "PATIENT_SEX_0405": {
+      "host": "HV-DENTAL-CLAIM-PATIENT-SEX",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "PATIENT_SEX_0405",
+      "legacy_field": "PATIENT_SEX_0405"
+    },
+    "PATIENT_SEX": {
+      "host": "HV-NON-HOSP-CLAIM-PATIENT-SEX",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PATIENT_SEX_0445",
+      "legacy_field": "PATIENT_SEX_0445"
+    },
+    "RELATION_TO_EMPLOYEE_0405": {
+      "host": "HV-DENTAL-CLAIM-RELATION-TO-EMPLOYEE",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "RELATION_TO_EMPLOYEE_0405",
+      "legacy_field": "RELATION_TO_EMPLOYEE_0405"
+    },
+    "RELATION_TO_EMPLOYEE": {
+      "host": "HV-NON-HOSP-CLAIM-RELATION-TO-EMPLOYEE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "RELATION_TO_EMPLOYEE_0445",
+      "legacy_field": "RELATION_TO_EMPLOYEE_0445"
+    },
+    "DENTIST_FIRST_NAME_0405": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-FIRST-NAME",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_FIRST_NAME_0405",
+      "legacy_field": "DENTIST_FIRST_NAME_0405"
+    },
+    "DENTIST_FIRST_NAME": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-FIRST-NAME",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_FIRST_NAME_0405",
+      "legacy_field": "DENTIST_FIRST_NAME_0405"
+    },
+    "DENTIST_LAST_NAME_0405": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-LAST-NAME",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_LAST_NAME_0405",
+      "legacy_field": "DENTIST_LAST_NAME_0405"
+    },
+    "DENTIST_LAST_NAME": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-LAST-NAME",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_LAST_NAME_0405",
+      "legacy_field": "DENTIST_LAST_NAME_0405"
+    },
+    "DENTIST_STREET_0405": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-STREET",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_STREET_0405",
+      "legacy_field": "DENTIST_STREET_0405"
+    },
+    "DENTIST_STREET": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-STREET",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_STREET_0405",
+      "legacy_field": "DENTIST_STREET_0405"
+    },
+    "DENTIST_CITY_0405": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-CITY",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_CITY_0405",
+      "legacy_field": "DENTIST_CITY_0405"
+    },
+    "DENTIST_CITY": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-CITY",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_CITY_0405",
+      "legacy_field": "DENTIST_CITY_0405"
+    },
+    "DENTIST_STATE_0405": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-STATE",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_STATE_0405",
+      "legacy_field": "DENTIST_STATE_0405"
+    },
+    "DENTIST_STATE": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-STATE",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_STATE_0405",
+      "legacy_field": "DENTIST_STATE_0405"
+    },
+    "DENTIST_ZIP_FIRST_FIVE_0405": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-ZIP-FIRST-FIVE",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_ZIP_FIRST_FIVE_0405",
+      "legacy_field": "DENTIST_ZIP_FIRST_FIVE_0405"
+    },
+    "DENTIST_ZIP_FIRST_FIVE": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-ZIP-FIRST-FIVE",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_ZIP_FIRST_FIVE_0405",
+      "legacy_field": "DENTIST_ZIP_FIRST_FIVE_0405"
+    },
+    "DENTIST_ZIP_LAST_FOUR_0405": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-ZIP-LAST-FOUR",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_ZIP_LAST_FOUR_0405",
+      "legacy_field": "DENTIST_ZIP_LAST_FOUR_0405"
+    },
+    "DENTIST_ZIP_LAST_FOUR": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-ZIP-LAST-FOUR",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_ZIP_LAST_FOUR_0405",
+      "legacy_field": "DENTIST_ZIP_LAST_FOUR_0405"
+    },
+    "DENTIST_LICENSE_NUMBER_0405": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-LICENSE-NUMBER",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_LICENSE_NUMBER_0405",
+      "legacy_field": "DENTIST_LICENSE_NUMBER_0405"
+    },
+    "DENTIST_LICENSE_NUMBER": {
+      "host": "HV-DENTAL-CLAIM-DENTIST-LICENSE-NUMBER",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DENTIST_LICENSE_NUMBER_0405",
+      "legacy_field": "DENTIST_LICENSE_NUMBER_0405"
+    },
+    "NUMBER_OF_PROCEDURES_0405": {
+      "host": "HV-DENTAL-CLAIM-NUMBER-OF-PROCEDURES",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "NUMBER_OF_PROCEDURES_0405",
+      "legacy_field": "NUMBER_OF_PROCEDURES_0405"
+    },
+    "NUMBER_OF_PROCEDURES": {
+      "host": "HV-NON-HOSP-CLAIM-NUMBER-OF-PROCEDURES",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "NUMBER_OF_PROCEDURES_0445",
+      "legacy_field": "NUMBER_OF_PROCEDURES_0445"
+    },
+    "TOOTH_NUMBER_0405": {
+      "host": "HV-DENTAL-CLAIM-TOOTH-NUMBER",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "TOOTH_NUMBER_0405",
+      "legacy_field": "TOOTH_NUMBER_0405"
+    },
+    "TOOTH_NUMBER": {
+      "host": "HV-DENTAL-CLAIM-TOOTH-NUMBER",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "TOOTH_NUMBER_0405",
+      "legacy_field": "TOOTH_NUMBER_0405"
+    },
+    "PROCEDURE_CODE_0405": {
+      "host": "HV-DENTAL-CLAIM-PROCEDURE-CODE",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "PROCEDURE_CODE_0405",
+      "legacy_field": "PROCEDURE_CODE_0405"
+    },
+    "PROCEDURE_CODE": {
+      "host": "HV-NON-HOSP-CLAIM-PROCEDURE-CODE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PROCEDURE_CODE_0445",
+      "legacy_field": "PROCEDURE_CODE_0445"
+    },
+    "DESCRIPTION_OF_SERVICE_0405": {
+      "host": "HV-DENTAL-CLAIM-DESCRIPTION-OF-SERVICE",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "DESCRIPTION_OF_SERVICE_0405",
+      "legacy_field": "DESCRIPTION_OF_SERVICE_0405"
+    },
+    "DESCRIPTION_OF_SERVICE": {
+      "host": "HV-NON-HOSP-CLAIM-DESCRIPTION-OF-SERVICE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "DESCRIPTION_OF_SERVICE_0445",
+      "legacy_field": "DESCRIPTION_OF_SERVICE_0445"
+    },
+    "FEE_0405": {
+      "host": "HV-DENTAL-CLAIM-FEE",
+      "record": "DENTAL_CLAIM",
+      "table": "DENTAL_CLAIM",
+      "column": "FEE_0405",
+      "legacy_field": "FEE_0405"
+    },
+    "FEE": {
+      "host": "HV-NON-HOSP-CLAIM-FEE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "FEE_0445",
+      "legacy_field": "FEE_0445"
+    },
+    "DEPT_ID_0410": {
+      "host": "HV-DEPARTMENT-DEPT-ID",
+      "record": "DEPARTMENT",
+      "table": "DEPARTMENT",
+      "column": "DEPT_ID_0410",
+      "legacy_field": "DEPT_ID_0410"
+    },
+    "DEPT_ID": {
+      "host": "HV-DEPARTMENT-DEPT-ID",
+      "record": "DEPARTMENT",
+      "table": "DEPARTMENT",
+      "column": "DEPT_ID_0410",
+      "legacy_field": "DEPT_ID_0410"
+    },
+    "DEPT_NAME_0410": {
+      "host": "HV-DEPARTMENT-DEPT-NAME",
+      "record": "DEPARTMENT",
+      "table": "DEPARTMENT",
+      "column": "DEPT_NAME_0410",
+      "legacy_field": "DEPT_NAME_0410"
+    },
+    "DEPT_NAME": {
+      "host": "HV-DEPARTMENT-DEPT-NAME",
+      "record": "DEPARTMENT",
+      "table": "DEPARTMENT",
+      "column": "DEPT_NAME_0410",
+      "legacy_field": "DEPT_NAME_0410"
+    },
+    "DEPT_HEAD_ID_0410": {
+      "host": "HV-DEPARTMENT-DEPT-HEAD-ID",
+      "record": "DEPARTMENT",
+      "table": "DEPARTMENT",
+      "column": "DEPT_HEAD_ID_0410",
+      "legacy_field": "DEPT_HEAD_ID_0410"
+    },
+    "DEPT_HEAD_ID": {
+      "host": "HV-DEPARTMENT-DEPT-HEAD-ID",
+      "record": "DEPARTMENT",
+      "table": "DEPARTMENT",
+      "column": "DEPT_HEAD_ID_0410",
+      "legacy_field": "DEPT_HEAD_ID_0410"
+    },
+    "EMP_ID_0415": {
+      "host": "HV-EMPLOYEE-EMP-ID",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_ID_0415",
+      "legacy_field": "EMP_ID_0415"
+    },
+    "EMP_ID": {
+      "host": "HV-EMPLOYEE-EMP-ID",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_ID_0415",
+      "legacy_field": "EMP_ID_0415"
+    },
+    "EMP_FIRST_NAME_0415": {
+      "host": "HV-EMPLOYEE-EMP-FIRST-NAME",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_FIRST_NAME_0415",
+      "legacy_field": "EMP_FIRST_NAME_0415"
+    },
+    "EMP_FIRST_NAME": {
+      "host": "HV-EMPLOYEE-EMP-FIRST-NAME",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_FIRST_NAME_0415",
+      "legacy_field": "EMP_FIRST_NAME_0415"
+    },
+    "EMP_LAST_NAME_0415": {
+      "host": "HV-EMPLOYEE-EMP-LAST-NAME",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_LAST_NAME_0415",
+      "legacy_field": "EMP_LAST_NAME_0415"
+    },
+    "EMP_LAST_NAME": {
+      "host": "HV-EMPLOYEE-EMP-LAST-NAME",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_LAST_NAME_0415",
+      "legacy_field": "EMP_LAST_NAME_0415"
+    },
+    "EMP_STREET_0415": {
+      "host": "HV-EMPLOYEE-EMP-STREET",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_STREET_0415",
+      "legacy_field": "EMP_STREET_0415"
+    },
+    "EMP_STREET": {
+      "host": "HV-EMPLOYEE-EMP-STREET",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_STREET_0415",
+      "legacy_field": "EMP_STREET_0415"
+    },
+    "EMP_CITY_0415": {
+      "host": "HV-EMPLOYEE-EMP-CITY",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_CITY_0415",
+      "legacy_field": "EMP_CITY_0415"
+    },
+    "EMP_CITY": {
+      "host": "HV-EMPLOYEE-EMP-CITY",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_CITY_0415",
+      "legacy_field": "EMP_CITY_0415"
+    },
+    "EMP_STATE_0415": {
+      "host": "HV-EMPLOYEE-EMP-STATE",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_STATE_0415",
+      "legacy_field": "EMP_STATE_0415"
+    },
+    "EMP_STATE": {
+      "host": "HV-EMPLOYEE-EMP-STATE",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_STATE_0415",
+      "legacy_field": "EMP_STATE_0415"
+    },
+    "EMP_ZIP_FIRST_FIVE_0415": {
+      "host": "HV-EMPLOYEE-EMP-ZIP-FIRST-FIVE",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_ZIP_FIRST_FIVE_0415",
+      "legacy_field": "EMP_ZIP_FIRST_FIVE_0415"
+    },
+    "EMP_ZIP_FIRST_FIVE": {
+      "host": "HV-EMPLOYEE-EMP-ZIP-FIRST-FIVE",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_ZIP_FIRST_FIVE_0415",
+      "legacy_field": "EMP_ZIP_FIRST_FIVE_0415"
+    },
+    "EMP_ZIP_LAST_FOUR_0415": {
+      "host": "HV-EMPLOYEE-EMP-ZIP-LAST-FOUR",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_ZIP_LAST_FOUR_0415",
+      "legacy_field": "EMP_ZIP_LAST_FOUR_0415"
+    },
+    "EMP_ZIP_LAST_FOUR": {
+      "host": "HV-EMPLOYEE-EMP-ZIP-LAST-FOUR",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_ZIP_LAST_FOUR_0415",
+      "legacy_field": "EMP_ZIP_LAST_FOUR_0415"
+    },
+    "EMP_PHONE_0415": {
+      "host": "HV-EMPLOYEE-EMP-PHONE",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_PHONE_0415",
+      "legacy_field": "EMP_PHONE_0415"
+    },
+    "EMP_PHONE": {
+      "host": "HV-EMPLOYEE-EMP-PHONE",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "EMP_PHONE_0415",
+      "legacy_field": "EMP_PHONE_0415"
+    },
+    "STATUS_0415": {
+      "host": "HV-EMPLOYEE-STATUS",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "STATUS_0415",
+      "legacy_field": "STATUS_0415"
+    },
+    "STATUS": {
+      "host": "HV-EMPLOYEE-STATUS",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "STATUS_0415",
+      "legacy_field": "STATUS_0415"
+    },
+    "SS_NUMBER_0415": {
+      "host": "HV-EMPLOYEE-SS-NUMBER",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "SS_NUMBER_0415",
+      "legacy_field": "SS_NUMBER_0415"
+    },
+    "SS_NUMBER": {
+      "host": "HV-EMPLOYEE-SS-NUMBER",
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "column": "SS_NUMBER_0415",
+      "legacy_field": "SS_NUMBER_0415"
+    },
+    "SALARY_GRADE_0420": {
+      "host": "HV-EMPOSITION-SALARY-GRADE",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "SALARY_GRADE_0420",
+      "legacy_field": "SALARY_GRADE_0420"
+    },
+    "SALARY_GRADE": {
+      "host": "HV-EMPOSITION-SALARY-GRADE",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "SALARY_GRADE_0420",
+      "legacy_field": "SALARY_GRADE_0420"
+    },
+    "SALARY_AMOUNT_0420": {
+      "host": "HV-EMPOSITION-SALARY-AMOUNT",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "SALARY_AMOUNT_0420",
+      "legacy_field": "SALARY_AMOUNT_0420"
+    },
+    "SALARY_AMOUNT": {
+      "host": "HV-EMPOSITION-SALARY-AMOUNT",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "SALARY_AMOUNT_0420",
+      "legacy_field": "SALARY_AMOUNT_0420"
+    },
+    "BONUS_PERCENT_0420": {
+      "host": "HV-EMPOSITION-BONUS-PERCENT",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "BONUS_PERCENT_0420",
+      "legacy_field": "BONUS_PERCENT_0420"
+    },
+    "BONUS_PERCENT": {
+      "host": "HV-EMPOSITION-BONUS-PERCENT",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "BONUS_PERCENT_0420",
+      "legacy_field": "BONUS_PERCENT_0420"
+    },
+    "COMMISSION_PERCENT_0420": {
+      "host": "HV-EMPOSITION-COMMISSION-PERCENT",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "COMMISSION_PERCENT_0420",
+      "legacy_field": "COMMISSION_PERCENT_0420"
+    },
+    "COMMISSION_PERCENT": {
+      "host": "HV-EMPOSITION-COMMISSION-PERCENT",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "COMMISSION_PERCENT_0420",
+      "legacy_field": "COMMISSION_PERCENT_0420"
+    },
+    "OVERTIME_RATE_0420": {
+      "host": "HV-EMPOSITION-OVERTIME-RATE",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "OVERTIME_RATE_0420",
+      "legacy_field": "OVERTIME_RATE_0420"
+    },
+    "OVERTIME_RATE": {
+      "host": "HV-EMPOSITION-OVERTIME-RATE",
+      "record": "EMPOSITION",
+      "table": "EMPOSITION",
+      "column": "OVERTIME_RATE_0420",
+      "legacy_field": "OVERTIME_RATE_0420"
+    },
+    "SKILL_LEVEL_0425": {
+      "host": "HV-EXPERTISE-SKILL-LEVEL",
+      "record": "EXPERTISE",
+      "table": "EXPERTISE",
+      "column": "SKILL_LEVEL_0425",
+      "legacy_field": "SKILL_LEVEL_0425"
+    },
+    "SKILL_LEVEL": {
+      "host": "HV-EXPERTISE-SKILL-LEVEL",
+      "record": "EXPERTISE",
+      "table": "EXPERTISE",
+      "column": "SKILL_LEVEL_0425",
+      "legacy_field": "SKILL_LEVEL_0425"
+    },
+    "PATIENT_FIRST_NAME_0430": {
+      "host": "HV-HOSPITAL-CLAIM-PATIENT-FIRST-NAME",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "PATIENT_FIRST_NAME_0430",
+      "legacy_field": "PATIENT_FIRST_NAME_0430"
+    },
+    "PATIENT_LAST_NAME_0430": {
+      "host": "HV-HOSPITAL-CLAIM-PATIENT-LAST-NAME",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "PATIENT_LAST_NAME_0430",
+      "legacy_field": "PATIENT_LAST_NAME_0430"
+    },
+    "PATIENT_SEX_0430": {
+      "host": "HV-HOSPITAL-CLAIM-PATIENT-SEX",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "PATIENT_SEX_0430",
+      "legacy_field": "PATIENT_SEX_0430"
+    },
+    "RELATION_TO_EMPLOYEE_0430": {
+      "host": "HV-HOSPITAL-CLAIM-RELATION-TO-EMPLOYEE",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "RELATION_TO_EMPLOYEE_0430",
+      "legacy_field": "RELATION_TO_EMPLOYEE_0430"
+    },
+    "HOSPITAL_NAME_0430": {
+      "host": "HV-HOSPITAL-CLAIM-HOSPITAL-NAME",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSPITAL_NAME_0430",
+      "legacy_field": "HOSPITAL_NAME_0430"
+    },
+    "HOSPITAL_NAME": {
+      "host": "HV-HOSPITAL-CLAIM-HOSPITAL-NAME",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSPITAL_NAME_0430",
+      "legacy_field": "HOSPITAL_NAME_0430"
+    },
+    "HOSP_STREET_0430": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-STREET",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_STREET_0430",
+      "legacy_field": "HOSP_STREET_0430"
+    },
+    "HOSP_STREET": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-STREET",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_STREET_0430",
+      "legacy_field": "HOSP_STREET_0430"
+    },
+    "HOSP_CITY_0430": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-CITY",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_CITY_0430",
+      "legacy_field": "HOSP_CITY_0430"
+    },
+    "HOSP_CITY": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-CITY",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_CITY_0430",
+      "legacy_field": "HOSP_CITY_0430"
+    },
+    "HOSP_STATE_0430": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-STATE",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_STATE_0430",
+      "legacy_field": "HOSP_STATE_0430"
+    },
+    "HOSP_STATE": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-STATE",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_STATE_0430",
+      "legacy_field": "HOSP_STATE_0430"
+    },
+    "HOSP_ZIP_FIRST_FIVE_0430": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-ZIP-FIRST-FIVE",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_ZIP_FIRST_FIVE_0430",
+      "legacy_field": "HOSP_ZIP_FIRST_FIVE_0430"
+    },
+    "HOSP_ZIP_FIRST_FIVE": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-ZIP-FIRST-FIVE",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_ZIP_FIRST_FIVE_0430",
+      "legacy_field": "HOSP_ZIP_FIRST_FIVE_0430"
+    },
+    "HOSP_ZIP_LAST_FOUR_0430": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-ZIP-LAST-FOUR",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_ZIP_LAST_FOUR_0430",
+      "legacy_field": "HOSP_ZIP_LAST_FOUR_0430"
+    },
+    "HOSP_ZIP_LAST_FOUR": {
+      "host": "HV-HOSPITAL-CLAIM-HOSP-ZIP-LAST-FOUR",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "HOSP_ZIP_LAST_FOUR_0430",
+      "legacy_field": "HOSP_ZIP_LAST_FOUR_0430"
+    },
+    "DIAGNOSIS_0430": {
+      "host": "HV-HOSPITAL-CLAIM-DIAGNOSIS",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "DIAGNOSIS_0430",
+      "legacy_field": "DIAGNOSIS_0430"
+    },
+    "DIAGNOSIS": {
+      "host": "HV-NON-HOSP-CLAIM-DIAGNOSIS",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "DIAGNOSIS_0445",
+      "legacy_field": "DIAGNOSIS_0445"
+    },
+    "WARD_DAYS_0430": {
+      "host": "HV-HOSPITAL-CLAIM-WARD-DAYS",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "WARD_DAYS_0430",
+      "legacy_field": "WARD_DAYS_0430"
+    },
+    "WARD_DAYS": {
+      "host": "HV-HOSPITAL-CLAIM-WARD-DAYS",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "WARD_DAYS_0430",
+      "legacy_field": "WARD_DAYS_0430"
+    },
+    "WARD_RATE_0430": {
+      "host": "HV-HOSPITAL-CLAIM-WARD-RATE",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "WARD_RATE_0430",
+      "legacy_field": "WARD_RATE_0430"
+    },
+    "WARD_RATE": {
+      "host": "HV-HOSPITAL-CLAIM-WARD-RATE",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "WARD_RATE_0430",
+      "legacy_field": "WARD_RATE_0430"
+    },
+    "WARD_TOTAL_0430": {
+      "host": "HV-HOSPITAL-CLAIM-WARD-TOTAL",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "WARD_TOTAL_0430",
+      "legacy_field": "WARD_TOTAL_0430"
+    },
+    "WARD_TOTAL": {
+      "host": "HV-HOSPITAL-CLAIM-WARD-TOTAL",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "WARD_TOTAL_0430",
+      "legacy_field": "WARD_TOTAL_0430"
+    },
+    "SEMI_DAYS_0430": {
+      "host": "HV-HOSPITAL-CLAIM-SEMI-DAYS",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "SEMI_DAYS_0430",
+      "legacy_field": "SEMI_DAYS_0430"
+    },
+    "SEMI_DAYS": {
+      "host": "HV-HOSPITAL-CLAIM-SEMI-DAYS",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "SEMI_DAYS_0430",
+      "legacy_field": "SEMI_DAYS_0430"
+    },
+    "SEMI_RATE_0430": {
+      "host": "HV-HOSPITAL-CLAIM-SEMI-RATE",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "SEMI_RATE_0430",
+      "legacy_field": "SEMI_RATE_0430"
+    },
+    "SEMI_RATE": {
+      "host": "HV-HOSPITAL-CLAIM-SEMI-RATE",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "SEMI_RATE_0430",
+      "legacy_field": "SEMI_RATE_0430"
+    },
+    "SEMI_TOTAL_0430": {
+      "host": "HV-HOSPITAL-CLAIM-SEMI-TOTAL",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "SEMI_TOTAL_0430",
+      "legacy_field": "SEMI_TOTAL_0430"
+    },
+    "SEMI_TOTAL": {
+      "host": "HV-HOSPITAL-CLAIM-SEMI-TOTAL",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "SEMI_TOTAL_0430",
+      "legacy_field": "SEMI_TOTAL_0430"
+    },
+    "DELIVERY_COST_0430": {
+      "host": "HV-HOSPITAL-CLAIM-DELIVERY-COST",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "DELIVERY_COST_0430",
+      "legacy_field": "DELIVERY_COST_0430"
+    },
+    "DELIVERY_COST": {
+      "host": "HV-HOSPITAL-CLAIM-DELIVERY-COST",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "DELIVERY_COST_0430",
+      "legacy_field": "DELIVERY_COST_0430"
+    },
+    "ANESTHESIA_COST_0430": {
+      "host": "HV-HOSPITAL-CLAIM-ANESTHESIA-COST",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "ANESTHESIA_COST_0430",
+      "legacy_field": "ANESTHESIA_COST_0430"
+    },
+    "ANESTHESIA_COST": {
+      "host": "HV-HOSPITAL-CLAIM-ANESTHESIA-COST",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "ANESTHESIA_COST_0430",
+      "legacy_field": "ANESTHESIA_COST_0430"
+    },
+    "LAB_COST_0430": {
+      "host": "HV-HOSPITAL-CLAIM-LAB-COST",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "LAB_COST_0430",
+      "legacy_field": "LAB_COST_0430"
+    },
+    "LAB_COST": {
+      "host": "HV-HOSPITAL-CLAIM-LAB-COST",
+      "record": "HOSPITAL_CLAIM",
+      "table": "HOSPITAL_CLAIM",
+      "column": "LAB_COST_0430",
+      "legacy_field": "LAB_COST_0430"
+    },
+    "INS_PLAN_CODE_0435": {
+      "host": "HV-INSURANCE-PLAN-INS-PLAN-CODE",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_PLAN_CODE_0435",
+      "legacy_field": "INS_PLAN_CODE_0435"
+    },
+    "INS_CO_NAME_0435": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-NAME",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_NAME_0435",
+      "legacy_field": "INS_CO_NAME_0435"
+    },
+    "INS_CO_NAME": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-NAME",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_NAME_0435",
+      "legacy_field": "INS_CO_NAME_0435"
+    },
+    "INS_CO_STREET_0435": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-STREET",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_STREET_0435",
+      "legacy_field": "INS_CO_STREET_0435"
+    },
+    "INS_CO_STREET": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-STREET",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_STREET_0435",
+      "legacy_field": "INS_CO_STREET_0435"
+    },
+    "INS_CO_CITY_0435": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-CITY",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_CITY_0435",
+      "legacy_field": "INS_CO_CITY_0435"
+    },
+    "INS_CO_CITY": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-CITY",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_CITY_0435",
+      "legacy_field": "INS_CO_CITY_0435"
+    },
+    "INS_CO_STATE_0435": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-STATE",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_STATE_0435",
+      "legacy_field": "INS_CO_STATE_0435"
+    },
+    "INS_CO_STATE": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-STATE",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_STATE_0435",
+      "legacy_field": "INS_CO_STATE_0435"
+    },
+    "INS_CO_ZIP_FIRST_FIVE_0435": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-ZIP-FIRST-FIVE",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_ZIP_FIRST_FIVE_0435",
+      "legacy_field": "INS_CO_ZIP_FIRST_FIVE_0435"
+    },
+    "INS_CO_ZIP_FIRST_FIVE": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-ZIP-FIRST-FIVE",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_ZIP_FIRST_FIVE_0435",
+      "legacy_field": "INS_CO_ZIP_FIRST_FIVE_0435"
+    },
+    "INS_CO_ZIP_LAST_FOUR_0435": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-ZIP-LAST-FOUR",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_ZIP_LAST_FOUR_0435",
+      "legacy_field": "INS_CO_ZIP_LAST_FOUR_0435"
+    },
+    "INS_CO_ZIP_LAST_FOUR": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-ZIP-LAST-FOUR",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_ZIP_LAST_FOUR_0435",
+      "legacy_field": "INS_CO_ZIP_LAST_FOUR_0435"
+    },
+    "INS_CO_PHONE_0435": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-PHONE",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_PHONE_0435",
+      "legacy_field": "INS_CO_PHONE_0435"
+    },
+    "INS_CO_PHONE": {
+      "host": "HV-INSURANCE-PLAN-INS-CO-PHONE",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "INS_CO_PHONE_0435",
+      "legacy_field": "INS_CO_PHONE_0435"
+    },
+    "GROUP_NUMBER_0435": {
+      "host": "HV-INSURANCE-PLAN-GROUP-NUMBER",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "GROUP_NUMBER_0435",
+      "legacy_field": "GROUP_NUMBER_0435"
+    },
+    "GROUP_NUMBER": {
+      "host": "HV-INSURANCE-PLAN-GROUP-NUMBER",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "GROUP_NUMBER_0435",
+      "legacy_field": "GROUP_NUMBER_0435"
+    },
+    "DEDUCT_0435": {
+      "host": "HV-INSURANCE-PLAN-DEDUCT",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "DEDUCT_0435",
+      "legacy_field": "DEDUCT_0435"
+    },
+    "DEDUCT": {
+      "host": "HV-INSURANCE-PLAN-DEDUCT",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "DEDUCT_0435",
+      "legacy_field": "DEDUCT_0435"
+    },
+    "MAXIMUM_LIFE_COST_0435": {
+      "host": "HV-INSURANCE-PLAN-MAXIMUM-LIFE-COST",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "MAXIMUM_LIFE_COST_0435",
+      "legacy_field": "MAXIMUM_LIFE_COST_0435"
+    },
+    "MAXIMUM_LIFE_COST": {
+      "host": "HV-INSURANCE-PLAN-MAXIMUM-LIFE-COST",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "MAXIMUM_LIFE_COST_0435",
+      "legacy_field": "MAXIMUM_LIFE_COST_0435"
+    },
+    "FAMILY_COST_0435": {
+      "host": "HV-INSURANCE-PLAN-FAMILY-COST",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "FAMILY_COST_0435",
+      "legacy_field": "FAMILY_COST_0435"
+    },
+    "FAMILY_COST": {
+      "host": "HV-INSURANCE-PLAN-FAMILY-COST",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "FAMILY_COST_0435",
+      "legacy_field": "FAMILY_COST_0435"
+    },
+    "DEP_COST_0435": {
+      "host": "HV-INSURANCE-PLAN-DEP-COST",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "DEP_COST_0435",
+      "legacy_field": "DEP_COST_0435"
+    },
+    "DEP_COST": {
+      "host": "HV-INSURANCE-PLAN-DEP-COST",
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "column": "DEP_COST_0435",
+      "legacy_field": "DEP_COST_0435"
+    },
+    "JOB_ID_0440": {
+      "host": "HV-JOB-JOB-ID",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "JOB_ID_0440",
+      "legacy_field": "JOB_ID_0440"
+    },
+    "JOB_ID": {
+      "host": "HV-JOB-JOB-ID",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "JOB_ID_0440",
+      "legacy_field": "JOB_ID_0440"
+    },
+    "TITLE_0440": {
+      "host": "HV-JOB-TITLE",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "TITLE_0440",
+      "legacy_field": "TITLE_0440"
+    },
+    "TITLE": {
+      "host": "HV-JOB-TITLE",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "TITLE_0440",
+      "legacy_field": "TITLE_0440"
+    },
+    "DESCRIPTION_LINE_0440": {
+      "host": "HV-JOB-DESCRIPTION-LINE",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "DESCRIPTION_LINE_0440",
+      "legacy_field": "DESCRIPTION_LINE_0440"
+    },
+    "DESCRIPTION_LINE": {
+      "host": "HV-JOB-DESCRIPTION-LINE",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "DESCRIPTION_LINE_0440",
+      "legacy_field": "DESCRIPTION_LINE_0440"
+    },
+    "REQUIREMENT_LINE_0440": {
+      "host": "HV-JOB-REQUIREMENT-LINE",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "REQUIREMENT_LINE_0440",
+      "legacy_field": "REQUIREMENT_LINE_0440"
+    },
+    "REQUIREMENT_LINE": {
+      "host": "HV-JOB-REQUIREMENT-LINE",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "REQUIREMENT_LINE_0440",
+      "legacy_field": "REQUIREMENT_LINE_0440"
+    },
+    "MINIMUM_SALARY_0440": {
+      "host": "HV-JOB-MINIMUM-SALARY",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "MINIMUM_SALARY_0440",
+      "legacy_field": "MINIMUM_SALARY_0440"
+    },
+    "MINIMUM_SALARY": {
+      "host": "HV-JOB-MINIMUM-SALARY",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "MINIMUM_SALARY_0440",
+      "legacy_field": "MINIMUM_SALARY_0440"
+    },
+    "MAXIMUM_SALARY_0440": {
+      "host": "HV-JOB-MAXIMUM-SALARY",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "MAXIMUM_SALARY_0440",
+      "legacy_field": "MAXIMUM_SALARY_0440"
+    },
+    "MAXIMUM_SALARY": {
+      "host": "HV-JOB-MAXIMUM-SALARY",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "MAXIMUM_SALARY_0440",
+      "legacy_field": "MAXIMUM_SALARY_0440"
+    },
+    "SALARY_GRADES_0440": {
+      "host": "HV-JOB-SALARY-GRADES",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "SALARY_GRADES_0440",
+      "legacy_field": "SALARY_GRADES_0440"
+    },
+    "SALARY_GRADES": {
+      "host": "HV-JOB-SALARY-GRADES",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "SALARY_GRADES_0440",
+      "legacy_field": "SALARY_GRADES_0440"
+    },
+    "NUMBER_OF_POSITIONS_0440": {
+      "host": "HV-JOB-NUMBER-OF-POSITIONS",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "NUMBER_OF_POSITIONS_0440",
+      "legacy_field": "NUMBER_OF_POSITIONS_0440"
+    },
+    "NUMBER_OF_POSITIONS": {
+      "host": "HV-JOB-NUMBER-OF-POSITIONS",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "NUMBER_OF_POSITIONS_0440",
+      "legacy_field": "NUMBER_OF_POSITIONS_0440"
+    },
+    "NUMBER_OPEN_0440": {
+      "host": "HV-JOB-NUMBER-OPEN",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "NUMBER_OPEN_0440",
+      "legacy_field": "NUMBER_OPEN_0440"
+    },
+    "NUMBER_OPEN": {
+      "host": "HV-JOB-NUMBER-OPEN",
+      "record": "JOB",
+      "table": "JOB",
+      "column": "NUMBER_OPEN_0440",
+      "legacy_field": "NUMBER_OPEN_0440"
+    },
+    "PATIENT_FIRST_NAME_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PATIENT-FIRST-NAME",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PATIENT_FIRST_NAME_0445",
+      "legacy_field": "PATIENT_FIRST_NAME_0445"
+    },
+    "PATIENT_LAST_NAME_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PATIENT-LAST-NAME",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PATIENT_LAST_NAME_0445",
+      "legacy_field": "PATIENT_LAST_NAME_0445"
+    },
+    "PATIENT_SEX_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PATIENT-SEX",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PATIENT_SEX_0445",
+      "legacy_field": "PATIENT_SEX_0445"
+    },
+    "RELATION_TO_EMPLOYEE_0445": {
+      "host": "HV-NON-HOSP-CLAIM-RELATION-TO-EMPLOYEE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "RELATION_TO_EMPLOYEE_0445",
+      "legacy_field": "RELATION_TO_EMPLOYEE_0445"
+    },
+    "PHYSICIAN_FIRST_NAME_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-FIRST-NAME",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_FIRST_NAME_0445",
+      "legacy_field": "PHYSICIAN_FIRST_NAME_0445"
+    },
+    "PHYSICIAN_FIRST_NAME": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-FIRST-NAME",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_FIRST_NAME_0445",
+      "legacy_field": "PHYSICIAN_FIRST_NAME_0445"
+    },
+    "PHYSICIAN_LAST_NAME_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-LAST-NAME",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_LAST_NAME_0445",
+      "legacy_field": "PHYSICIAN_LAST_NAME_0445"
+    },
+    "PHYSICIAN_LAST_NAME": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-LAST-NAME",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_LAST_NAME_0445",
+      "legacy_field": "PHYSICIAN_LAST_NAME_0445"
+    },
+    "PHYSICIAN_STREET_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-STREET",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_STREET_0445",
+      "legacy_field": "PHYSICIAN_STREET_0445"
+    },
+    "PHYSICIAN_STREET": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-STREET",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_STREET_0445",
+      "legacy_field": "PHYSICIAN_STREET_0445"
+    },
+    "PHYSICIAN_CITY_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-CITY",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_CITY_0445",
+      "legacy_field": "PHYSICIAN_CITY_0445"
+    },
+    "PHYSICIAN_CITY": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-CITY",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_CITY_0445",
+      "legacy_field": "PHYSICIAN_CITY_0445"
+    },
+    "PHYSICIAN_STATE_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-STATE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_STATE_0445",
+      "legacy_field": "PHYSICIAN_STATE_0445"
+    },
+    "PHYSICIAN_STATE": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-STATE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_STATE_0445",
+      "legacy_field": "PHYSICIAN_STATE_0445"
+    },
+    "PHYSICIAN_ZIP_FIRST_FIVE_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-ZIP-FIRST-FIVE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_ZIP_FIRST_FIVE_0445",
+      "legacy_field": "PHYSICIAN_ZIP_FIRST_FIVE_0445"
+    },
+    "PHYSICIAN_ZIP_FIRST_FIVE": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-ZIP-FIRST-FIVE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_ZIP_FIRST_FIVE_0445",
+      "legacy_field": "PHYSICIAN_ZIP_FIRST_FIVE_0445"
+    },
+    "PHYSICIAN_ZIP_LAST_FOUR_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-ZIP-LAST-FOUR",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_ZIP_LAST_FOUR_0445",
+      "legacy_field": "PHYSICIAN_ZIP_LAST_FOUR_0445"
+    },
+    "PHYSICIAN_ZIP_LAST_FOUR": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-ZIP-LAST-FOUR",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_ZIP_LAST_FOUR_0445",
+      "legacy_field": "PHYSICIAN_ZIP_LAST_FOUR_0445"
+    },
+    "PHYSICIAN_ID_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-ID",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_ID_0445",
+      "legacy_field": "PHYSICIAN_ID_0445"
+    },
+    "PHYSICIAN_ID": {
+      "host": "HV-NON-HOSP-CLAIM-PHYSICIAN-ID",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PHYSICIAN_ID_0445",
+      "legacy_field": "PHYSICIAN_ID_0445"
+    },
+    "DIAGNOSIS_0445": {
+      "host": "HV-NON-HOSP-CLAIM-DIAGNOSIS",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "DIAGNOSIS_0445",
+      "legacy_field": "DIAGNOSIS_0445"
+    },
+    "NUMBER_OF_PROCEDURES_0445": {
+      "host": "HV-NON-HOSP-CLAIM-NUMBER-OF-PROCEDURES",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "NUMBER_OF_PROCEDURES_0445",
+      "legacy_field": "NUMBER_OF_PROCEDURES_0445"
+    },
+    "PROCEDURE_CODE_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PROCEDURE-CODE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PROCEDURE_CODE_0445",
+      "legacy_field": "PROCEDURE_CODE_0445"
+    },
+    "DESCRIPTION_OF_SERVICE_0445": {
+      "host": "HV-NON-HOSP-CLAIM-DESCRIPTION-OF-SERVICE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "DESCRIPTION_OF_SERVICE_0445",
+      "legacy_field": "DESCRIPTION_OF_SERVICE_0445"
+    },
+    "FEE_0445": {
+      "host": "HV-NON-HOSP-CLAIM-FEE",
+      "record": "NON_HOSP_CLAIM",
+      "table": "NON_HOSP_CLAIM",
+      "column": "FEE_0445",
+      "legacy_field": "FEE_0445"
+    },
+    "OFFICE_CODE_0450": {
+      "host": "HV-OFFICE-OFFICE-CODE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_CODE_0450",
+      "legacy_field": "OFFICE_CODE_0450"
+    },
+    "OFFICE_CODE": {
+      "host": "HV-OFFICE-OFFICE-CODE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_CODE_0450",
+      "legacy_field": "OFFICE_CODE_0450"
+    },
+    "OFFICE_STREET_0450": {
+      "host": "HV-OFFICE-OFFICE-STREET",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_STREET_0450",
+      "legacy_field": "OFFICE_STREET_0450"
+    },
+    "OFFICE_STREET": {
+      "host": "HV-OFFICE-OFFICE-STREET",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_STREET_0450",
+      "legacy_field": "OFFICE_STREET_0450"
+    },
+    "OFFICE_CITY_0450": {
+      "host": "HV-OFFICE-OFFICE-CITY",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_CITY_0450",
+      "legacy_field": "OFFICE_CITY_0450"
+    },
+    "OFFICE_CITY": {
+      "host": "HV-OFFICE-OFFICE-CITY",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_CITY_0450",
+      "legacy_field": "OFFICE_CITY_0450"
+    },
+    "OFFICE_STATE_0450": {
+      "host": "HV-OFFICE-OFFICE-STATE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_STATE_0450",
+      "legacy_field": "OFFICE_STATE_0450"
+    },
+    "OFFICE_STATE": {
+      "host": "HV-OFFICE-OFFICE-STATE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_STATE_0450",
+      "legacy_field": "OFFICE_STATE_0450"
+    },
+    "OFFICE_ZIP_FIRST_FIVE_0450": {
+      "host": "HV-OFFICE-OFFICE-ZIP-FIRST-FIVE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_ZIP_FIRST_FIVE_0450",
+      "legacy_field": "OFFICE_ZIP_FIRST_FIVE_0450"
+    },
+    "OFFICE_ZIP_FIRST_FIVE": {
+      "host": "HV-OFFICE-OFFICE-ZIP-FIRST-FIVE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_ZIP_FIRST_FIVE_0450",
+      "legacy_field": "OFFICE_ZIP_FIRST_FIVE_0450"
+    },
+    "OFFICE_ZIP_LAST_FOUR_0450": {
+      "host": "HV-OFFICE-OFFICE-ZIP-LAST-FOUR",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_ZIP_LAST_FOUR_0450",
+      "legacy_field": "OFFICE_ZIP_LAST_FOUR_0450"
+    },
+    "OFFICE_ZIP_LAST_FOUR": {
+      "host": "HV-OFFICE-OFFICE-ZIP-LAST-FOUR",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_ZIP_LAST_FOUR_0450",
+      "legacy_field": "OFFICE_ZIP_LAST_FOUR_0450"
+    },
+    "OFFICE_PHONE_0450": {
+      "host": "HV-OFFICE-OFFICE-PHONE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_PHONE_0450",
+      "legacy_field": "OFFICE_PHONE_0450"
+    },
+    "OFFICE_PHONE": {
+      "host": "HV-OFFICE-OFFICE-PHONE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_PHONE_0450",
+      "legacy_field": "OFFICE_PHONE_0450"
+    },
+    "OFFICE_AREA_CODE_0450": {
+      "host": "HV-OFFICE-OFFICE-AREA-CODE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_AREA_CODE_0450",
+      "legacy_field": "OFFICE_AREA_CODE_0450"
+    },
+    "OFFICE_AREA_CODE": {
+      "host": "HV-OFFICE-OFFICE-AREA-CODE",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "OFFICE_AREA_CODE_0450",
+      "legacy_field": "OFFICE_AREA_CODE_0450"
+    },
+    "SPEED_DIAL_0450": {
+      "host": "HV-OFFICE-SPEED-DIAL",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "SPEED_DIAL_0450",
+      "legacy_field": "SPEED_DIAL_0450"
+    },
+    "SPEED_DIAL": {
+      "host": "HV-OFFICE-SPEED-DIAL",
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "column": "SPEED_DIAL_0450",
+      "legacy_field": "SPEED_DIAL_0450"
+    },
+    "SKILL_ID_0455": {
+      "host": "HV-SKILL-SKILL-ID",
+      "record": "SKILL",
+      "table": "SKILL",
+      "column": "SKILL_ID_0455",
+      "legacy_field": "SKILL_ID_0455"
+    },
+    "SKILL_ID": {
+      "host": "HV-SKILL-SKILL-ID",
+      "record": "SKILL",
+      "table": "SKILL",
+      "column": "SKILL_ID_0455",
+      "legacy_field": "SKILL_ID_0455"
+    },
+    "SKILL_NAME_0455": {
+      "host": "HV-SKILL-SKILL-NAME",
+      "record": "SKILL",
+      "table": "SKILL",
+      "column": "SKILL_NAME_0455",
+      "legacy_field": "SKILL_NAME_0455"
+    },
+    "SKILL_NAME": {
+      "host": "HV-SKILL-SKILL-NAME",
+      "record": "SKILL",
+      "table": "SKILL",
+      "column": "SKILL_NAME_0455",
+      "legacy_field": "SKILL_NAME_0455"
+    },
+    "SKILL_DESCRIPTION_0455": {
+      "host": "HV-SKILL-SKILL-DESCRIPTION",
+      "record": "SKILL",
+      "table": "SKILL",
+      "column": "SKILL_DESCRIPTION_0455",
+      "legacy_field": "SKILL_DESCRIPTION_0455"
+    },
+    "SKILL_DESCRIPTION": {
+      "host": "HV-SKILL-SKILL-DESCRIPTION",
+      "record": "SKILL",
+      "table": "SKILL",
+      "column": "SKILL_DESCRIPTION_0455",
+      "legacy_field": "SKILL_DESCRIPTION_0455"
+    },
+    "STRUCTURE_CODE_0460": {
+      "host": "HV-STRUCTURE-STRUCTURE-CODE",
+      "record": "STRUCTURE",
+      "table": "STRUCTURE",
+      "column": "STRUCTURE_CODE_0460",
+      "legacy_field": "STRUCTURE_CODE_0460"
+    },
+    "STRUCTURE_CODE": {
+      "host": "HV-STRUCTURE-STRUCTURE-CODE",
+      "record": "STRUCTURE",
+      "table": "STRUCTURE",
+      "column": "STRUCTURE_CODE_0460",
+      "legacy_field": "STRUCTURE_CODE_0460"
+    }
+  },
+  "calc_key_map": {
+    "DEPARTMENT": {
+      "record": "DEPARTMENT",
+      "table": "DEPARTMENT",
+      "key": "DEPT_ID_0410",
+      "host": "HV-DEPARTMENT-DEPT-ID"
+    },
+    "EMPLOYEE": {
+      "record": "EMPLOYEE",
+      "table": "EMPLOYEE",
+      "key": "EMP_ID_0415",
+      "host": "HV-EMPLOYEE-EMP-ID"
+    },
+    "INSURANCE_PLAN": {
+      "record": "INSURANCE_PLAN",
+      "table": "INSURANCE_PLAN",
+      "key": "INS_PLAN_CODE_0435",
+      "host": "HV-INSURANCE-PLAN-INS-PLAN-CODE"
+    },
+    "JOB": {
+      "record": "JOB",
+      "table": "JOB",
+      "key": "JOB_ID_0440",
+      "host": "HV-JOB-JOB-ID"
+    },
+    "OFFICE": {
+      "record": "OFFICE",
+      "table": "OFFICE",
+      "key": "OFFICE_CODE_0450",
+      "host": "HV-OFFICE-OFFICE-CODE"
+    },
+    "SKILL": {
+      "record": "SKILL",
+      "table": "SKILL",
+      "key": "SKILL_ID_0455",
+      "host": "HV-SKILL-SKILL-ID"
+    }
+  },
+  "set_ordering_map": {
+    "SKILL_EXPERTISE": {
+      "order_by": [
+        "SKILL_ID_0455"
+      ]
+    },
+    "EMP_EMPOSITION": {
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "OFFICE_EMPLOYEE": {
+      "order_by": [
+        "OFFICE_CODE_0450"
+      ]
+    },
+    "JOB_EMPOSITION": {
+      "order_by": [
+        "JOB_ID_0440"
+      ]
+    },
+    "MANAGES": {
+      "order_by": []
+    },
+    "DEPT_EMPLOYEE": {
+      "order_by": [
+        "DEPT_ID_0410"
+      ]
+    },
+    "EMP_EXPERTISE": {
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "REPORTS_TO": {
+      "order_by": []
+    },
+    "EMP_COVERAGE": {
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "COVERAGE_CLAIMS": {
+      "order_by": [
+        "COVERAGE_ID"
+      ]
+    }
+  },
+  "navigation_intent": {
+    "SKILL_EXPERTISE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "SKILL",
+      "child_record": "EXPERTISE",
+      "parent_key": "SKILL_ID_0455",
+      "child_fk": "SKILL_ID_0455",
+      "order_by": [
+        "SKILL_ID_0455"
+      ]
+    },
+    "EMP_EMPOSITION": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EMPOSITION",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "OFFICE_EMPLOYEE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "OFFICE",
+      "child_record": "EMPLOYEE",
+      "parent_key": "OFFICE_CODE_0450",
+      "child_fk": "OFFICE_CODE_0450",
+      "order_by": [
+        "OFFICE_CODE_0450"
+      ]
+    },
+    "JOB_EMPOSITION": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "JOB",
+      "child_record": "EMPOSITION",
+      "parent_key": "JOB_ID_0440",
+      "child_fk": "JOB_ID_0440",
+      "order_by": [
+        "JOB_ID_0440"
+      ]
+    },
+    "MANAGES": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "order_by": []
+    },
+    "DEPT_EMPLOYEE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "DEPARTMENT",
+      "child_record": "EMPLOYEE",
+      "parent_key": "DEPT_ID_0410",
+      "child_fk": "DEPT_ID_0410",
+      "order_by": [
+        "DEPT_ID_0410"
+      ]
+    },
+    "EMP_EXPERTISE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EXPERTISE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "REPORTS_TO": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "order_by": []
+    },
+    "EMP_COVERAGE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "COVERAGE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "COVERAGE_CLAIMS": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "COVERAGE",
+      "child_record": "NON_HOSP_CLAIM",
+      "parent_key": "COVERAGE_ID",
+      "child_fk": "COVERAGE_ID",
+      "order_by": [
+        "COVERAGE_ID"
+      ]
+    }
+  },
+  "nullable_fk_map": {
+    "COVERAGE.EMP_ID_0415": true,
+    "COVERAGE.INS_PLAN_CODE_0400": true,
+    "DENTAL_CLAIM.COVERAGE_ID": true,
+    "EMPLOYEE.OFFICE_CODE_0450": true,
+    "EMPLOYEE.DEPT_ID_0410": true,
+    "EMPOSITION.EMP_ID_0415": true,
+    "EMPOSITION.JOB_ID_0440": true,
+    "EXPERTISE.SKILL_ID_0455": true,
+    "EXPERTISE.EMP_ID_0415": true,
+    "HOSPITAL_CLAIM.COVERAGE_ID": true,
+    "NON_HOSP_CLAIM.COVERAGE_ID": true,
+    "STRUCTURE.MANAGES_EMP_ID_0415": true,
+    "STRUCTURE.REPORTS_TO_EMP_ID_0415": true
+  },
+  "date_part_map": {
+    "SELECTION_YEAR_0400": {
+      "host": "HV-COVERAGE-SELECTION-DATE",
+      "table": "COVERAGE",
+      "column": "SELECTION_DATE_0400",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "SELECTION_MONTH_0400": {
+      "host": "HV-COVERAGE-SELECTION-DATE",
+      "table": "COVERAGE",
+      "column": "SELECTION_DATE_0400",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "SELECTION_DAY_0400": {
+      "host": "HV-COVERAGE-SELECTION-DATE",
+      "table": "COVERAGE",
+      "column": "SELECTION_DATE_0400",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "TERMINATION_YEAR_0400": {
+      "host": "HV-COVERAGE-TERMINATION-DATE",
+      "table": "COVERAGE",
+      "column": "TERMINATION_DATE_0400",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "TERMINATION_MONTH_0400": {
+      "host": "HV-COVERAGE-TERMINATION-DATE",
+      "table": "COVERAGE",
+      "column": "TERMINATION_DATE_0400",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "TERMINATION_DAY_0400": {
+      "host": "HV-COVERAGE-TERMINATION-DATE",
+      "table": "COVERAGE",
+      "column": "TERMINATION_DATE_0400",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "CLAIM_YEAR_0405": {
+      "host": "HV-DENTAL-CLAIM-CLAIM-DATE",
+      "table": "DENTAL_CLAIM",
+      "column": "CLAIM_DATE_0405",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "CLAIM_MONTH_0405": {
+      "host": "HV-DENTAL-CLAIM-CLAIM-DATE",
+      "table": "DENTAL_CLAIM",
+      "column": "CLAIM_DATE_0405",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "CLAIM_DAY_0405": {
+      "host": "HV-DENTAL-CLAIM-CLAIM-DATE",
+      "table": "DENTAL_CLAIM",
+      "column": "CLAIM_DATE_0405",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "PATIENT_BIRTH_YEAR_0405": {
+      "host": "HV-DENTAL-CLAIM-PATIENT-BIRTH-DATE",
+      "table": "DENTAL_CLAIM",
+      "column": "PATIENT_BIRTH_DATE_0405",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "PATIENT_BIRTH_MONTH_0405": {
+      "host": "HV-DENTAL-CLAIM-PATIENT-BIRTH-DATE",
+      "table": "DENTAL_CLAIM",
+      "column": "PATIENT_BIRTH_DATE_0405",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "PATIENT_BIRTH_DAY_0405": {
+      "host": "HV-DENTAL-CLAIM-PATIENT-BIRTH-DATE",
+      "table": "DENTAL_CLAIM",
+      "column": "PATIENT_BIRTH_DATE_0405",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "SERVICE_YEAR_0405": {
+      "host": "HV-DENTAL-CLAIM-SERVICE-DATE",
+      "table": "DENTAL_CLAIM",
+      "column": "SERVICE_DATE_0405",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "SERVICE_MONTH_0405": {
+      "host": "HV-DENTAL-CLAIM-SERVICE-DATE",
+      "table": "DENTAL_CLAIM",
+      "column": "SERVICE_DATE_0405",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "SERVICE_DAY_0405": {
+      "host": "HV-DENTAL-CLAIM-SERVICE-DATE",
+      "table": "DENTAL_CLAIM",
+      "column": "SERVICE_DATE_0405",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "START_YEAR_0415": {
+      "host": "HV-EMPLOYEE-START-DATE",
+      "table": "EMPLOYEE",
+      "column": "START_DATE_0415",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "START_MONTH_0415": {
+      "host": "HV-EMPLOYEE-START-DATE",
+      "table": "EMPLOYEE",
+      "column": "START_DATE_0415",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "START_DAY_0415": {
+      "host": "HV-EMPLOYEE-START-DATE",
+      "table": "EMPLOYEE",
+      "column": "START_DATE_0415",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "TERMINATION_YEAR_0415": {
+      "host": "HV-EMPLOYEE-TERMINATION-DATE",
+      "table": "EMPLOYEE",
+      "column": "TERMINATION_DATE_0415",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "TERMINATION_MONTH_0415": {
+      "host": "HV-EMPLOYEE-TERMINATION-DATE",
+      "table": "EMPLOYEE",
+      "column": "TERMINATION_DATE_0415",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "TERMINATION_DAY_0415": {
+      "host": "HV-EMPLOYEE-TERMINATION-DATE",
+      "table": "EMPLOYEE",
+      "column": "TERMINATION_DATE_0415",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "BIRTH_YEAR_0415": {
+      "host": "HV-EMPLOYEE-BIRTH-DATE",
+      "table": "EMPLOYEE",
+      "column": "BIRTH_DATE_0415",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "BIRTH_MONTH_0415": {
+      "host": "HV-EMPLOYEE-BIRTH-DATE",
+      "table": "EMPLOYEE",
+      "column": "BIRTH_DATE_0415",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "BIRTH_DAY_0415": {
+      "host": "HV-EMPLOYEE-BIRTH-DATE",
+      "table": "EMPLOYEE",
+      "column": "BIRTH_DATE_0415",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "START_YEAR_0420": {
+      "host": "HV-EMPOSITION-START-DATE",
+      "table": "EMPOSITION",
+      "column": "START_DATE_0420",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "START_MONTH_0420": {
+      "host": "HV-EMPOSITION-START-DATE",
+      "table": "EMPOSITION",
+      "column": "START_DATE_0420",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "START_DAY_0420": {
+      "host": "HV-EMPOSITION-START-DATE",
+      "table": "EMPOSITION",
+      "column": "START_DATE_0420",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "FINISH_YEAR_0420": {
+      "host": "HV-EMPOSITION-FINISH-DATE",
+      "table": "EMPOSITION",
+      "column": "FINISH_DATE_0420",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "FINISH_MONTH_0420": {
+      "host": "HV-EMPOSITION-FINISH-DATE",
+      "table": "EMPOSITION",
+      "column": "FINISH_DATE_0420",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "FINISH_DAY_0420": {
+      "host": "HV-EMPOSITION-FINISH-DATE",
+      "table": "EMPOSITION",
+      "column": "FINISH_DATE_0420",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "EXPERTISE_YEAR_0425": {
+      "host": "HV-EXPERTISE-EXPERTISE-DATE",
+      "table": "EXPERTISE",
+      "column": "EXPERTISE_DATE_0425",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "EXPERTISE_MONTH_0425": {
+      "host": "HV-EXPERTISE-EXPERTISE-DATE",
+      "table": "EXPERTISE",
+      "column": "EXPERTISE_DATE_0425",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "EXPERTISE_DAY_0425": {
+      "host": "HV-EXPERTISE-EXPERTISE-DATE",
+      "table": "EXPERTISE",
+      "column": "EXPERTISE_DATE_0425",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "CLAIM_YEAR_0430": {
+      "host": "HV-HOSPITAL-CLAIM-CLAIM-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "CLAIM_DATE_0430",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "CLAIM_MONTH_0430": {
+      "host": "HV-HOSPITAL-CLAIM-CLAIM-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "CLAIM_DATE_0430",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "CLAIM_DAY_0430": {
+      "host": "HV-HOSPITAL-CLAIM-CLAIM-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "CLAIM_DATE_0430",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "PATIENT_BIRTH_YEAR_0430": {
+      "host": "HV-HOSPITAL-CLAIM-PATIENT-BIRTH-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "PATIENT_BIRTH_DATE_0430",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "PATIENT_BIRTH_MONTH_0430": {
+      "host": "HV-HOSPITAL-CLAIM-PATIENT-BIRTH-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "PATIENT_BIRTH_DATE_0430",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "PATIENT_BIRTH_DAY_0430": {
+      "host": "HV-HOSPITAL-CLAIM-PATIENT-BIRTH-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "PATIENT_BIRTH_DATE_0430",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "ADMIT_YEAR_0430": {
+      "host": "HV-HOSPITAL-CLAIM-ADMIT-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "ADMIT_DATE_0430",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "ADMIT_MONTH_0430": {
+      "host": "HV-HOSPITAL-CLAIM-ADMIT-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "ADMIT_DATE_0430",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "ADMIT_DAY_0430": {
+      "host": "HV-HOSPITAL-CLAIM-ADMIT-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "ADMIT_DATE_0430",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "DISCHARGE_YEAR_0430": {
+      "host": "HV-HOSPITAL-CLAIM-DISCHARGE-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "DISCHARGE_DATE_0430",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "DISCHARGE_MONTH_0430": {
+      "host": "HV-HOSPITAL-CLAIM-DISCHARGE-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "DISCHARGE_DATE_0430",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "DISCHARGE_DAY_0430": {
+      "host": "HV-HOSPITAL-CLAIM-DISCHARGE-DATE",
+      "table": "HOSPITAL_CLAIM",
+      "column": "DISCHARGE_DATE_0430",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "CLAIM_YEAR_0445": {
+      "host": "HV-NON-HOSP-CLAIM-CLAIM-DATE",
+      "table": "NON_HOSP_CLAIM",
+      "column": "CLAIM_DATE_0445",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "CLAIM_MONTH_0445": {
+      "host": "HV-NON-HOSP-CLAIM-CLAIM-DATE",
+      "table": "NON_HOSP_CLAIM",
+      "column": "CLAIM_DATE_0445",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "CLAIM_DAY_0445": {
+      "host": "HV-NON-HOSP-CLAIM-CLAIM-DATE",
+      "table": "NON_HOSP_CLAIM",
+      "column": "CLAIM_DATE_0445",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "PATIENT_BIRTH_YEAR_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PATIENT-BIRTH-DATE",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PATIENT_BIRTH_DATE_0445",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "PATIENT_BIRTH_MONTH_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PATIENT-BIRTH-DATE",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PATIENT_BIRTH_DATE_0445",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "PATIENT_BIRTH_DAY_0445": {
+      "host": "HV-NON-HOSP-CLAIM-PATIENT-BIRTH-DATE",
+      "table": "NON_HOSP_CLAIM",
+      "column": "PATIENT_BIRTH_DATE_0445",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "SERVICE_YEAR_0445": {
+      "host": "HV-NON-HOSP-CLAIM-SERVICE-DATE",
+      "table": "NON_HOSP_CLAIM",
+      "column": "SERVICE_DATE_0445",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "SERVICE_MONTH_0445": {
+      "host": "HV-NON-HOSP-CLAIM-SERVICE-DATE",
+      "table": "NON_HOSP_CLAIM",
+      "column": "SERVICE_DATE_0445",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "SERVICE_DAY_0445": {
+      "host": "HV-NON-HOSP-CLAIM-SERVICE-DATE",
+      "table": "NON_HOSP_CLAIM",
+      "column": "SERVICE_DATE_0445",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    },
+    "STRUCTURE_YEAR_0460": {
+      "host": "HV-STRUCTURE-STRUCTURE-DATE",
+      "table": "STRUCTURE",
+      "column": "STRUCTURE_DATE_0460",
+      "date_part": "YEAR",
+      "substring_start": 3,
+      "substring_length": 2
+    },
+    "STRUCTURE_MONTH_0460": {
+      "host": "HV-STRUCTURE-STRUCTURE-DATE",
+      "table": "STRUCTURE",
+      "column": "STRUCTURE_DATE_0460",
+      "date_part": "MONTH",
+      "substring_start": 6,
+      "substring_length": 2
+    },
+    "STRUCTURE_DAY_0460": {
+      "host": "HV-STRUCTURE-STRUCTURE-DATE",
+      "table": "STRUCTURE",
+      "column": "STRUCTURE_DATE_0460",
+      "date_part": "DAY",
+      "substring_start": 9,
+      "substring_length": 2
+    }
+  },
+  "output_semantics": {
+    "generated_by": "idms-db2-modernizer-phase1",
+    "usage": "IDMS retrieval COBOL to DB2 embedded SQL conversion",
+    "physical_types_source": "DB2_DDL",
+    "logical_mapping_source": "PHASE1_CANONICAL_METADATA"
+  },
+  "paragraph_operation_graph": {},
+  "validation_messages": []
+}
