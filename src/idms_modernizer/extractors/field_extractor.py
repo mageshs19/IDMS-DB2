@@ -1,4 +1,5 @@
 import re
+
 from dataclasses import dataclass
 from typing import List, Set
 
@@ -18,25 +19,25 @@ class FieldExtractor:
     """
     Discovers IDMS schema fields from record-section lines.
 
-    Important behavior:
-    - Identifies field candidates with COBOL level numbers.
+    Behavior:
+    - Identifies COBOL level numbers.
+    - Preserves the level number in DataField.level.
     - Skips FILLER.
     - Skips level 88 condition names.
-    - Skips group / outer fields that have subordinate child fields.
+    - Skips group / outer fields that have subordinate children.
     - Returns only leaf / inner fields.
 
     Example:
-
         02 EMP-NAME-0415
         03 EMP-FIRST-NAME-0415 DISPLAY X(10) 1 10
-        03 EMP-LAST-NAME-0415  DISPLAY X(15) 11 15
+        03 EMP-LAST-NAME-0415 DISPLAY X(15) 11 15
 
     Result:
-        EMP-FIRST-NAME-0415
-        EMP-LAST-NAME-0415
+        03 EMP-FIRST-NAME-0415
+        03 EMP-LAST-NAME-0415
 
     Skipped:
-        EMP-NAME-0415
+        02 EMP-NAME-0415
     """
 
     FIELD_NAME_PATTERN = re.compile(
@@ -46,19 +47,19 @@ class FieldExtractor:
         re.IGNORECASE,
     )
 
-    USAGE_PATTERN = re.compile(
-        r"\b(DISPLAY|COMP-3|COMP)\b",
-        re.IGNORECASE,
-    )
-
     def extract(
         self,
         lines: List[str],
     ) -> List[DataField]:
-        print("USING FIELD EXTRACTOR VERSION LEAF-ONLY-2026-07-08")
+        print("USING FIELD EXTRACTOR VERSION LEAF-ONLY-WITH-LEVEL")
 
-        candidates = self._discover_candidates(lines)
-        leaf_candidates = self._mark_and_filter_leaf_fields(candidates)
+        candidates = self.discover_candidates(
+            lines=lines,
+        )
+
+        leaf_candidates = self.mark_and_filter_leaf_fields(
+            candidates=candidates,
+        )
 
         fields: List[DataField] = []
         seen: Set[str] = set()
@@ -70,49 +71,62 @@ class FieldExtractor:
                 continue
 
             seen.add(name)
-            fields.append(DataField(name=name))
+
+            fields.append(
+                DataField(
+                    name=name,
+                    level=candidate.level,
+                )
+            )
 
         return fields
 
-    def _discover_candidates(
+    def discover_candidates(
         self,
         lines: List[str],
     ) -> List[FieldCandidate]:
         candidates: List[FieldCandidate] = []
 
-        for raw_line in lines:
-            line = self.clean_line(raw_line)
+        for line in lines:
+            cleaned_line = self.clean_line(
+                line=line,
+            )
 
-            if not line:
+            if not cleaned_line:
                 continue
 
-            match = self.FIELD_NAME_PATTERN.match(line)
+            match = self.FIELD_NAME_PATTERN.match(
+                cleaned_line,
+            )
 
             if not match:
                 continue
 
-            level_text = match.group("level")
+            level = int(
+                match.group("level"),
+            )
+
             name = match.group("name").upper()
             rest = match.group("rest").strip()
 
-            if level_text == "88":
+            if name == "FILLER":
                 continue
 
-            if name.startswith("FILLER"):
+            if level == 88:
                 continue
 
             candidates.append(
                 FieldCandidate(
-                    level=int(level_text),
+                    level=level,
                     name=name,
                     rest=rest,
-                    original_line=line,
+                    original_line=cleaned_line,
                 )
             )
 
         return candidates
 
-    def _mark_and_filter_leaf_fields(
+    def mark_and_filter_leaf_fields(
         self,
         candidates: List[FieldCandidate],
     ) -> List[FieldCandidate]:
@@ -124,7 +138,6 @@ class FieldExtractor:
         before the structure returns to the same or lower level.
 
         Example:
-
             02 OFFICE-ZIP-0450
             04 OFFICE-ZIP-FIRST-FIVE-0450
             04 OFFICE-ZIP-LAST-FOUR-0450
@@ -134,7 +147,7 @@ class FieldExtractor:
         """
 
         for index, candidate in enumerate(candidates):
-            for next_candidate in candidates[index + 1 :]:
+            for next_candidate in candidates[index + 1:]:
                 if next_candidate.level <= candidate.level:
                     break
 
@@ -150,14 +163,33 @@ class FieldExtractor:
 
     def clean_line(
         self,
-        line: str,
+        line: str | None,
     ) -> str:
         if line is None:
             return ""
 
-        cleaned = line.strip()
+        cleaned = str(line).strip()
 
-        cleaned = cleaned.replace("\u00a0", " ")
-        cleaned = re.sub(r"\s+", " ", cleaned)
+        cleaned = cleaned.replace(
+            "\t",
+            " ",
+        )
+
+        cleaned = cleaned.replace(
+            "\u00a0",
+            " ",
+        )
+
+        cleaned = re.sub(
+            r"<[^>]+>",
+            " ",
+            cleaned,
+        )
+
+        cleaned = re.sub(
+            r"\s+",
+            " ",
+            cleaned,
+        ).strip()
 
         return cleaned

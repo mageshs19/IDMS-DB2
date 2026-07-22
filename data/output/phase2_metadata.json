@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-07-08T10:35:15.266800Z",
+  "generated_at": "2026-07-22T09:06:31.548329Z",
   "source": "PHASE1",
   "schema_source": "PHASE1_CANONICAL_DB2_METADATA",
   "record_table_map": {
@@ -214,18 +214,18 @@
         {
           "name": "DENTIST_LICENSE_NUMBER_0405",
           "column": "DENTIST_LICENSE_NUMBER_0405",
-          "datatype": "VARCHAR(6)",
-          "length": null,
-          "scale": null,
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
           "nullable": true,
           "primary_key": false
         },
         {
           "name": "NUMBER_OF_PROCEDURES_0405",
           "column": "NUMBER_OF_PROCEDURES_0405",
-          "datatype": "SMALLINT",
-          "length": 4,
-          "scale": 0,
+          "datatype": "DECIMAL(1,0)",
+          "length": null,
+          "scale": null,
           "nullable": true,
           "primary_key": false
         },
@@ -241,9 +241,9 @@
         {
           "name": "PROCEDURE_CODE_0405",
           "column": "PROCEDURE_CODE_0405",
-          "datatype": "VARCHAR(4)",
-          "length": null,
-          "scale": null,
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
           "nullable": true,
           "primary_key": false
         },
@@ -259,7 +259,7 @@
         {
           "name": "FEE_0405",
           "column": "FEE_0405",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -417,9 +417,9 @@
         {
           "name": "EMP_PHONE_0415",
           "column": "EMP_PHONE_0415",
-          "datatype": "VARCHAR(10)",
-          "length": null,
-          "scale": null,
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
           "nullable": true,
           "primary_key": false
         },
@@ -435,18 +435,9 @@
         {
           "name": "SS_NUMBER_0415",
           "column": "SS_NUMBER_0415",
-          "datatype": "VARCHAR(9)",
-          "length": null,
-          "scale": null,
-          "nullable": true,
-          "primary_key": false
-        },
-        {
-          "name": "OFFICE_CODE_0450",
-          "column": "OFFICE_CODE_0450",
-          "datatype": "VARCHAR(3)",
-          "length": null,
-          "scale": null,
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
           "nullable": true,
           "primary_key": false
         },
@@ -456,6 +447,15 @@
           "datatype": "SMALLINT",
           "length": 4,
           "scale": 0,
+          "nullable": true,
+          "primary_key": false
+        },
+        {
+          "name": "OFFICE_CODE_0450",
+          "column": "OFFICE_CODE_0450",
+          "datatype": "VARCHAR(3)",
+          "length": null,
+          "scale": null,
           "nullable": true,
           "primary_key": false
         }
@@ -496,7 +496,7 @@
         {
           "name": "SALARY_AMOUNT_0420",
           "column": "SALARY_AMOUNT_0420",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -505,7 +505,7 @@
         {
           "name": "BONUS_PERCENT_0420",
           "column": "BONUS_PERCENT_0420",
-          "datatype": "DECIMAL(3,0)",
+          "datatype": "DECIMAL(3,3)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -514,7 +514,7 @@
         {
           "name": "COMMISSION_PERCENT_0420",
           "column": "COMMISSION_PERCENT_0420",
-          "datatype": "DECIMAL(3,0)",
+          "datatype": "DECIMAL(3,3)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -523,7 +523,7 @@
         {
           "name": "OVERTIME_RATE_0420",
           "column": "OVERTIME_RATE_0420",
-          "datatype": "DECIMAL(3,0)",
+          "datatype": "DECIMAL(3,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -735,7 +735,7 @@
         {
           "name": "WARD_DAYS_0430",
           "column": "WARD_DAYS_0430",
-          "datatype": "DECIMAL(3,0)",
+          "datatype": "DECIMAL(5,0)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -744,7 +744,7 @@
         {
           "name": "WARD_RATE_0430",
           "column": "WARD_RATE_0430",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -753,7 +753,7 @@
         {
           "name": "WARD_TOTAL_0430",
           "column": "WARD_TOTAL_0430",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -762,7 +762,7 @@
         {
           "name": "SEMI_DAYS_0430",
           "column": "SEMI_DAYS_0430",
-          "datatype": "DECIMAL(3,0)",
+          "datatype": "DECIMAL(5,0)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -771,7 +771,7 @@
         {
           "name": "SEMI_RATE_0430",
           "column": "SEMI_RATE_0430",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -780,7 +780,7 @@
         {
           "name": "SEMI_TOTAL_0430",
           "column": "SEMI_TOTAL_0430",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -789,7 +789,7 @@
         {
           "name": "DELIVERY_COST_0430",
           "column": "DELIVERY_COST_0430",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -798,7 +798,7 @@
         {
           "name": "ANESTHESIA_COST_0430",
           "column": "ANESTHESIA_COST_0430",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -807,7 +807,7 @@
         {
           "name": "LAB_COST_0430",
           "column": "LAB_COST_0430",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -895,17 +895,17 @@
         {
           "name": "INS_CO_PHONE_0435",
           "column": "INS_CO_PHONE_0435",
-          "datatype": "VARCHAR(10)",
-          "length": null,
-          "scale": null,
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
           "nullable": true,
           "primary_key": false
         },
         {
           "name": "GROUP_NUMBER_0435",
           "column": "GROUP_NUMBER_0435",
-          "datatype": "INTEGER",
-          "length": 9,
+          "datatype": "SMALLINT",
+          "length": 4,
           "scale": 0,
           "nullable": true,
           "primary_key": false
@@ -913,7 +913,7 @@
         {
           "name": "DEDUCT_0435",
           "column": "DEDUCT_0435",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -922,7 +922,7 @@
         {
           "name": "MAXIMUM_LIFE_COST_0435",
           "column": "MAXIMUM_LIFE_COST_0435",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -931,7 +931,7 @@
         {
           "name": "FAMILY_COST_0435",
           "column": "FAMILY_COST_0435",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -940,7 +940,7 @@
         {
           "name": "DEP_COST_0435",
           "column": "DEP_COST_0435",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -992,26 +992,26 @@
         {
           "name": "MINIMUM_SALARY_0440",
           "column": "MINIMUM_SALARY_0440",
-          "datatype": "INTEGER",
-          "length": 9,
-          "scale": 0,
+          "datatype": "DECIMAL(2,2)",
+          "length": null,
+          "scale": null,
           "nullable": true,
           "primary_key": false
         },
         {
           "name": "MAXIMUM_SALARY_0440",
           "column": "MAXIMUM_SALARY_0440",
-          "datatype": "INTEGER",
-          "length": 9,
-          "scale": 0,
+          "datatype": "DECIMAL(2,2)",
+          "length": null,
+          "scale": null,
           "nullable": true,
           "primary_key": false
         },
         {
           "name": "SALARY_GRADES_0440",
           "column": "SALARY_GRADES_0440",
-          "datatype": "INTEGER",
-          "length": 9,
+          "datatype": "SMALLINT",
+          "length": 4,
           "scale": 0,
           "nullable": true,
           "primary_key": false
@@ -1170,8 +1170,8 @@
         {
           "name": "PHYSICIAN_ID_0445",
           "column": "PHYSICIAN_ID_0445",
-          "datatype": "INTEGER",
-          "length": 9,
+          "datatype": "SMALLINT",
+          "length": 4,
           "scale": 0,
           "nullable": true,
           "primary_key": false
@@ -1188,18 +1188,18 @@
         {
           "name": "NUMBER_OF_PROCEDURES_0445",
           "column": "NUMBER_OF_PROCEDURES_0445",
-          "datatype": "SMALLINT",
-          "length": 4,
-          "scale": 0,
+          "datatype": "DECIMAL(1,0)",
+          "length": null,
+          "scale": null,
           "nullable": true,
           "primary_key": false
         },
         {
           "name": "PROCEDURE_CODE_0445",
           "column": "PROCEDURE_CODE_0445",
-          "datatype": "VARCHAR(4)",
-          "length": null,
-          "scale": null,
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
           "nullable": true,
           "primary_key": false
         },
@@ -1215,7 +1215,7 @@
         {
           "name": "FEE_0445",
           "column": "FEE_0445",
-          "datatype": "DECIMAL(5,0)",
+          "datatype": "DECIMAL(2,2)",
           "length": null,
           "scale": null,
           "nullable": true,
@@ -1294,9 +1294,9 @@
         {
           "name": "OFFICE_PHONE_0450",
           "column": "OFFICE_PHONE_0450",
-          "datatype": "VARCHAR(21)",
-          "length": null,
-          "scale": null,
+          "datatype": "SMALLINT",
+          "length": 4,
+          "scale": 0,
           "nullable": true,
           "primary_key": false
         },
@@ -1400,14 +1400,25 @@
   ],
   "relationships": [
     {
-      "set_name": "SKILL_EXPERTISE",
-      "parent_record": "SKILL",
-      "child_record": "EXPERTISE",
-      "parent_key": "SKILL_ID_0455",
-      "child_fk": "SKILL_ID_0455",
+      "set_name": "EMP_COVERAGE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "COVERAGE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
       "cardinality": "1:N",
       "order_by": [
-        "SKILL_ID_0455"
+        "EMP_ID_0415"
+      ]
+    },
+    {
+      "set_name": "DEPT_EMPLOYEE",
+      "parent_record": "DEPARTMENT",
+      "child_record": "EMPLOYEE",
+      "parent_key": "DEPT_ID_0410",
+      "child_fk": "DEPT_ID_0410",
+      "cardinality": "1:N",
+      "order_by": [
+        "DEPT_ID_0410"
       ]
     },
     {
@@ -1422,17 +1433,6 @@
       ]
     },
     {
-      "set_name": "OFFICE_EMPLOYEE",
-      "parent_record": "OFFICE",
-      "child_record": "EMPLOYEE",
-      "parent_key": "OFFICE_CODE_0450",
-      "child_fk": "OFFICE_CODE_0450",
-      "cardinality": "1:N",
-      "order_by": [
-        "OFFICE_CODE_0450"
-      ]
-    },
-    {
       "set_name": "JOB_EMPOSITION",
       "parent_record": "JOB",
       "child_record": "EMPOSITION",
@@ -1441,57 +1441,6 @@
       "cardinality": "1:N",
       "order_by": [
         "JOB_ID_0440"
-      ]
-    },
-    {
-      "set_name": "MANAGES",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": null,
-      "cardinality": "1:N",
-      "order_by": []
-    },
-    {
-      "set_name": "DEPT_EMPLOYEE",
-      "parent_record": "DEPARTMENT",
-      "child_record": "EMPLOYEE",
-      "parent_key": "DEPT_ID_0410",
-      "child_fk": "DEPT_ID_0410",
-      "cardinality": "1:N",
-      "order_by": [
-        "DEPT_ID_0410"
-      ]
-    },
-    {
-      "set_name": "EMP_EXPERTISE",
-      "parent_record": "EMPLOYEE",
-      "child_record": "EXPERTISE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": "EMP_ID_0415",
-      "cardinality": "1:N",
-      "order_by": [
-        "EMP_ID_0415"
-      ]
-    },
-    {
-      "set_name": "REPORTS_TO",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": null,
-      "cardinality": "1:N",
-      "order_by": []
-    },
-    {
-      "set_name": "EMP_COVERAGE",
-      "parent_record": "EMPLOYEE",
-      "child_record": "COVERAGE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": "EMP_ID_0415",
-      "cardinality": "1:N",
-      "order_by": [
-        "EMP_ID_0415"
       ]
     },
     {
@@ -1525,6 +1474,57 @@
       "cardinality": "1:N",
       "order_by": [
         "COVERAGE_ID"
+      ]
+    },
+    {
+      "set_name": "MANAGES",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "cardinality": "1:N",
+      "order_by": []
+    },
+    {
+      "set_name": "OFFICE_EMPLOYEE",
+      "parent_record": "OFFICE",
+      "child_record": "EMPLOYEE",
+      "parent_key": "OFFICE_CODE_0450",
+      "child_fk": "OFFICE_CODE_0450",
+      "cardinality": "1:N",
+      "order_by": [
+        "OFFICE_CODE_0450"
+      ]
+    },
+    {
+      "set_name": "SKILL_EXPERTISE",
+      "parent_record": "SKILL",
+      "child_record": "EXPERTISE",
+      "parent_key": "SKILL_ID_0455",
+      "child_fk": "SKILL_ID_0455",
+      "cardinality": "1:N",
+      "order_by": [
+        "SKILL_ID_0455"
+      ]
+    },
+    {
+      "set_name": "REPORTS_TO",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "cardinality": "1:N",
+      "order_by": []
+    },
+    {
+      "set_name": "EMP_EXPERTISE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EXPERTISE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "cardinality": "1:N",
+      "order_by": [
+        "EMP_ID_0415"
       ]
     }
   ],
@@ -3025,9 +3025,14 @@
     }
   },
   "set_ordering_map": {
-    "SKILL_EXPERTISE": {
+    "EMP_COVERAGE": {
       "order_by": [
-        "SKILL_ID_0455"
+        "EMP_ID_0415"
+      ]
+    },
+    "DEPT_EMPLOYEE": {
+      "order_by": [
+        "DEPT_ID_0410"
       ]
     },
     "EMP_EMPOSITION": {
@@ -3035,52 +3040,57 @@
         "EMP_ID_0415"
       ]
     },
-    "OFFICE_EMPLOYEE": {
-      "order_by": [
-        "OFFICE_CODE_0450"
-      ]
-    },
     "JOB_EMPOSITION": {
       "order_by": [
         "JOB_ID_0440"
-      ]
-    },
-    "MANAGES": {
-      "order_by": []
-    },
-    "DEPT_EMPLOYEE": {
-      "order_by": [
-        "DEPT_ID_0410"
-      ]
-    },
-    "EMP_EXPERTISE": {
-      "order_by": [
-        "EMP_ID_0415"
-      ]
-    },
-    "REPORTS_TO": {
-      "order_by": []
-    },
-    "EMP_COVERAGE": {
-      "order_by": [
-        "EMP_ID_0415"
       ]
     },
     "COVERAGE_CLAIMS": {
       "order_by": [
         "COVERAGE_ID"
       ]
+    },
+    "MANAGES": {
+      "order_by": []
+    },
+    "OFFICE_EMPLOYEE": {
+      "order_by": [
+        "OFFICE_CODE_0450"
+      ]
+    },
+    "SKILL_EXPERTISE": {
+      "order_by": [
+        "SKILL_ID_0455"
+      ]
+    },
+    "REPORTS_TO": {
+      "order_by": []
+    },
+    "EMP_EXPERTISE": {
+      "order_by": [
+        "EMP_ID_0415"
+      ]
     }
   },
   "navigation_intent": {
-    "SKILL_EXPERTISE": {
+    "EMP_COVERAGE": {
       "access_pattern": "SET_NAVIGATION",
-      "parent_record": "SKILL",
-      "child_record": "EXPERTISE",
-      "parent_key": "SKILL_ID_0455",
-      "child_fk": "SKILL_ID_0455",
+      "parent_record": "EMPLOYEE",
+      "child_record": "COVERAGE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
       "order_by": [
-        "SKILL_ID_0455"
+        "EMP_ID_0415"
+      ]
+    },
+    "DEPT_EMPLOYEE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "DEPARTMENT",
+      "child_record": "EMPLOYEE",
+      "parent_key": "DEPT_ID_0410",
+      "child_fk": "DEPT_ID_0410",
+      "order_by": [
+        "DEPT_ID_0410"
       ]
     },
     "EMP_EMPOSITION": {
@@ -3091,16 +3101,6 @@
       "child_fk": "EMP_ID_0415",
       "order_by": [
         "EMP_ID_0415"
-      ]
-    },
-    "OFFICE_EMPLOYEE": {
-      "access_pattern": "SET_NAVIGATION",
-      "parent_record": "OFFICE",
-      "child_record": "EMPLOYEE",
-      "parent_key": "OFFICE_CODE_0450",
-      "child_fk": "OFFICE_CODE_0450",
-      "order_by": [
-        "OFFICE_CODE_0450"
       ]
     },
     "JOB_EMPOSITION": {
@@ -3113,6 +3113,16 @@
         "JOB_ID_0440"
       ]
     },
+    "COVERAGE_CLAIMS": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "COVERAGE",
+      "child_record": "NON_HOSP_CLAIM",
+      "parent_key": "COVERAGE_ID",
+      "child_fk": "COVERAGE_ID",
+      "order_by": [
+        "COVERAGE_ID"
+      ]
+    },
     "MANAGES": {
       "access_pattern": "SET_NAVIGATION",
       "parent_record": "EMPLOYEE",
@@ -3121,24 +3131,24 @@
       "child_fk": null,
       "order_by": []
     },
-    "DEPT_EMPLOYEE": {
+    "OFFICE_EMPLOYEE": {
       "access_pattern": "SET_NAVIGATION",
-      "parent_record": "DEPARTMENT",
+      "parent_record": "OFFICE",
       "child_record": "EMPLOYEE",
-      "parent_key": "DEPT_ID_0410",
-      "child_fk": "DEPT_ID_0410",
+      "parent_key": "OFFICE_CODE_0450",
+      "child_fk": "OFFICE_CODE_0450",
       "order_by": [
-        "DEPT_ID_0410"
+        "OFFICE_CODE_0450"
       ]
     },
-    "EMP_EXPERTISE": {
+    "SKILL_EXPERTISE": {
       "access_pattern": "SET_NAVIGATION",
-      "parent_record": "EMPLOYEE",
+      "parent_record": "SKILL",
       "child_record": "EXPERTISE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": "EMP_ID_0415",
+      "parent_key": "SKILL_ID_0455",
+      "child_fk": "SKILL_ID_0455",
       "order_by": [
-        "EMP_ID_0415"
+        "SKILL_ID_0455"
       ]
     },
     "REPORTS_TO": {
@@ -3149,24 +3159,14 @@
       "child_fk": null,
       "order_by": []
     },
-    "EMP_COVERAGE": {
+    "EMP_EXPERTISE": {
       "access_pattern": "SET_NAVIGATION",
       "parent_record": "EMPLOYEE",
-      "child_record": "COVERAGE",
+      "child_record": "EXPERTISE",
       "parent_key": "EMP_ID_0415",
       "child_fk": "EMP_ID_0415",
       "order_by": [
         "EMP_ID_0415"
-      ]
-    },
-    "COVERAGE_CLAIMS": {
-      "access_pattern": "SET_NAVIGATION",
-      "parent_record": "COVERAGE",
-      "child_record": "NON_HOSP_CLAIM",
-      "parent_key": "COVERAGE_ID",
-      "child_fk": "COVERAGE_ID",
-      "order_by": [
-        "COVERAGE_ID"
       ]
     }
   },
@@ -3174,8 +3174,8 @@
     "COVERAGE.EMP_ID_0415": true,
     "COVERAGE.INS_PLAN_CODE_0400": true,
     "DENTAL_CLAIM.COVERAGE_ID": true,
-    "EMPLOYEE.OFFICE_CODE_0450": true,
     "EMPLOYEE.DEPT_ID_0410": true,
+    "EMPLOYEE.OFFICE_CODE_0450": true,
     "EMPOSITION.EMP_ID_0415": true,
     "EMPOSITION.JOB_ID_0440": true,
     "EXPERTISE.SKILL_ID_0455": true,

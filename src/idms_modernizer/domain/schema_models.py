@@ -10,6 +10,9 @@ from idms_modernizer.domain.relationship_models import (
 
 class DataField(BaseModel):
     name: str
+
+    level: int | None = None
+
     datatype: str | None = None
     length: int | None = None
     scale: int | None = None
@@ -23,12 +26,15 @@ class DataField(BaseModel):
 @dataclass
 class Record:
     name: str
+
     fields: list[DataField] = field(
         default_factory=list,
     )
+
     set_memberships: list[SetMembership] = field(
         default_factory=list,
     )
+
     primary_key: str | None = None
     cobol_zone: str | None = None
 
@@ -43,9 +49,11 @@ class SchemaMetadata(BaseModel):
     records: list[Record] = Field(
         default_factory=list,
     )
+
     sets: list[SetDefinition] = Field(
         default_factory=list,
     )
+
     relationships: list[Relationship] = Field(
         default_factory=list,
     )

@@ -186,20 +186,20 @@ EJECT
         05 HV-EMPLOYEE-EMP-STATE-0415                    PIC X(2).
         05 HV-EMPLOYEE-EMP-ZIP-FIRST-FIVE-0415           PIC X(5).
         05 HV-EMPLOYEE-EMP-ZIP-LAST-FOUR-0415            PIC X(4).
-        05 HV-EMPLOYEE-EMP-PHONE-0415                    PIC X(10).
+        05 HV-EMPLOYEE-EMP-PHONE-0415                    PIC S9(4) COMP.
         05 HV-EMPLOYEE-STATUS-0415                       PIC X(2).
-        05 HV-EMPLOYEE-SS-NUMBER-0415                    PIC X(9).
-        05 HV-EMPLOYEE-OFFICE-CODE-0450                  PIC X(3).
+        05 HV-EMPLOYEE-SS-NUMBER-0415                    PIC S9(4) COMP.
         05 HV-EMPLOYEE-DEPT-ID-0410                      PIC S9(4) COMP.
+        05 HV-EMPLOYEE-OFFICE-CODE-0450                  PIC X(3).
 
      01 HV-EMPOSITION.
         05 HV-EMPOSITION-START-DATE-0420                 PIC X(10).
         05 HV-EMPOSITION-FINISH-DATE-0420                PIC X(10).
         05 HV-EMPOSITION-SALARY-GRADE-0420               PIC S9(4) COMP.
-        05 HV-EMPOSITION-SALARY-AMOUNT-0420              PIC S9(5) COMP-3.
-        05 HV-EMPOSITION-BONUS-PERCENT-0420              PIC S9(3) COMP-3.
-        05 HV-EMPOSITION-COMMISSION-PERCENT-0420         PIC S9(3) COMP-3.
-        05 HV-EMPOSITION-OVERTIME-RATE-0420              PIC S9(3) COMP-3.
+        05 HV-EMPOSITION-SALARY-AMOUNT-0420              PIC S9(1)V9(2) COMP-3.
+        05 HV-EMPOSITION-BONUS-PERCENT-0420              PIC S9(1)V9(3) COMP-3.
+        05 HV-EMPOSITION-COMMISSION-PERCENT-0420         PIC S9(1)V9(3) COMP-3.
+        05 HV-EMPOSITION-OVERTIME-RATE-0420              PIC S9(1)V9(2) COMP-3.
         05 HV-EMPOSITION-EMP-ID-0415                     PIC S9(4) COMP.
         05 HV-EMPOSITION-JOB-ID-0440                     PIC S9(4) COMP.
 
@@ -208,9 +208,9 @@ EJECT
         05 HV-JOB-TITLE-0440                             PIC X(20).
         05 HV-JOB-DESCRIPTION-LINE-0440                  PIC X(120).
         05 HV-JOB-REQUIREMENT-LINE-0440                  PIC X(120).
-        05 HV-JOB-MINIMUM-SALARY-0440                    PIC S9(9) COMP.
-        05 HV-JOB-MAXIMUM-SALARY-0440                    PIC S9(9) COMP.
-        05 HV-JOB-SALARY-GRADES-0440                     PIC S9(9) COMP.
+        05 HV-JOB-MINIMUM-SALARY-0440                    PIC S9(1)V9(2) COMP-3.
+        05 HV-JOB-MAXIMUM-SALARY-0440                    PIC S9(1)V9(2) COMP-3.
+        05 HV-JOB-SALARY-GRADES-0440                     PIC S9(4) COMP.
         05 HV-JOB-NUMBER-OF-POSITIONS-0440               PIC S9(4) COMP.
         05 HV-JOB-NUMBER-OPEN-0440                       PIC S9(4) COMP.
 
@@ -221,7 +221,7 @@ EJECT
         05 HV-OFFICE-OFFICE-STATE-0450                   PIC X(2).
         05 HV-OFFICE-OFFICE-ZIP-FIRST-FIVE-0450          PIC X(5).
         05 HV-OFFICE-OFFICE-ZIP-LAST-FOUR-0450           PIC X(4).
-        05 HV-OFFICE-OFFICE-PHONE-0450                   PIC X(21).
+        05 HV-OFFICE-OFFICE-PHONE-0450                   PIC S9(4) COMP.
         05 HV-OFFICE-OFFICE-AREA-CODE-0450               PIC X(3).
         05 HV-OFFICE-SPEED-DIAL-0450                     PIC X(3).
 
@@ -239,8 +239,8 @@ EJECT
      01 NI-EMPLOYEE-EMP-PHONE-0415                    PIC S9(4) COMP.
      01 NI-EMPLOYEE-STATUS-0415                       PIC S9(4) COMP.
      01 NI-EMPLOYEE-SS-NUMBER-0415                    PIC S9(4) COMP.
-     01 NI-EMPLOYEE-OFFICE-CODE-0450                  PIC S9(4) COMP.
      01 NI-EMPLOYEE-DEPT-ID-0410                      PIC S9(4) COMP.
+     01 NI-EMPLOYEE-OFFICE-CODE-0450                  PIC S9(4) COMP.
      01 NI-EMPOSITION-FINISH-DATE-0420                PIC S9(4) COMP.
      01 NI-EMPOSITION-SALARY-GRADE-0420               PIC S9(4) COMP.
      01 NI-EMPOSITION-SALARY-AMOUNT-0420              PIC S9(4) COMP.
@@ -284,8 +284,8 @@ EJECT
                        EMP_PHONE_0415,
                        STATUS_0415,
                        SS_NUMBER_0415,
-                       OFFICE_CODE_0450,
-                       DEPT_ID_0410
+                       DEPT_ID_0410,
+                       OFFICE_CODE_0450
                   FROM EMPLOYEE
                  WHERE DEPT_ID_0410 = :HV-DEPARTMENT-DEPT-ID-0410
                  ORDER BY DEPT_ID_0410
@@ -327,8 +327,8 @@ FETCH-DEPT-EMPLOYEE.
                 :HV-EMPLOYEE-EMP-PHONE-0415 :NI-EMPLOYEE-EMP-PHONE-0415,
                 :HV-EMPLOYEE-STATUS-0415 :NI-EMPLOYEE-STATUS-0415,
                 :HV-EMPLOYEE-SS-NUMBER-0415 :NI-EMPLOYEE-SS-NUMBER-0415,
-                :HV-EMPLOYEE-OFFICE-CODE-0450 :NI-EMPLOYEE-OFFICE-CODE-0450,
-                :HV-EMPLOYEE-DEPT-ID-0410 :NI-EMPLOYEE-DEPT-ID-0410
+                :HV-EMPLOYEE-DEPT-ID-0410 :NI-EMPLOYEE-DEPT-ID-0410,
+                :HV-EMPLOYEE-OFFICE-CODE-0450 :NI-EMPLOYEE-OFFICE-CODE-0450
        END-EXEC.
        IF SQLCODE NOT = 0 AND SQLCODE NOT = 100
           PERFORM SQL-ERROR

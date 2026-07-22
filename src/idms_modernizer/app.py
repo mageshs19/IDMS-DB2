@@ -1,3 +1,5 @@
+# src/idms_modernizer/app.py
+
 from pathlib import Path
 from time import perf_counter
 
@@ -9,9 +11,7 @@ from idms_modernizer.core.constants import (
     ER_DIAGRAM_FILE,
     PHASE2_METADATA_FILE,
 )
-
 from idms_modernizer.parsers.cobol_pdf_extractor import CobolPdfExtractor
-
 from idms_modernizer.services.metadata_service import MetadataService
 from idms_modernizer.services.canonical_schema_builder import (
     CanonicalSchemaBuilder,
@@ -29,8 +29,10 @@ from idms_modernizer.services.phase2_conversion_bridge import (
 from idms_modernizer.services.er_diagram_generator import (
     generate_er_diagram,
 )
-
 from idms_modernizer.generators.ddl_generator import DDLGenerator
+from idms_modernizer.services.excel_sheet_mapping_service import (
+    ExcelSheetMappingService,
+)
 
 
 def log_timing(
@@ -43,9 +45,7 @@ def log_timing(
 
     print(message)
 
-    timings.append(
-        message,
-    )
+    timings.append(message)
 
     return perf_counter()
 
@@ -57,7 +57,7 @@ def total_timing_only() -> str:
     )
 
     for item in reversed(timings):
-        if item.startswith("TOTAL:"):
+        if item.startswith("TOTAL: "):
             return item
 
     return ""
@@ -71,27 +71,17 @@ def split_phase2_timings(
 
     for message in validation_messages:
         if message.startswith("Phase 2 - "):
-            timings.append(
-                message,
-            )
+            timings.append(message)
         else:
-            cleaned_messages.append(
-                message,
-            )
+            cleaned_messages.append(message)
 
     return cleaned_messages
 
 
 def initialize_directories() -> None:
-    ensure_directory(
-        settings.input_dir,
-    )
-    ensure_directory(
-        settings.output_dir,
-    )
-    ensure_directory(
-        settings.temp_dir,
-    )
+    ensure_directory(settings.input_dir)
+    ensure_directory(settings.output_dir)
+    ensure_directory(settings.temp_dir)
 
 
 def initialize_session_state() -> None:
@@ -118,6 +108,7 @@ def initialize_session_state() -> None:
         "er_png_path": "",
         "er_image_bytes": None,
         "output_files": {},
+        "excel_mapping_rows": [],
     }
 
     for key, value in defaults.items():
@@ -148,37 +139,26 @@ def reset_outputs() -> None:
     st.session_state.er_png_path = ""
     st.session_state.er_image_bytes = None
     st.session_state.output_files = {}
+    st.session_state.excel_mapping_rows = []
 
 
 def save_uploaded_file(
     uploaded_file,
     target_folder: str,
 ) -> str:
-    target_dir = Path(
-        target_folder,
-    )
+    target_dir = Path(target_folder)
 
     target_dir.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    target_path = (
-        target_dir
-        / uploaded_file.name
-    )
+    target_path = target_dir / uploaded_file.name
 
-    with open(
-        target_path,
-        "wb",
-    ) as file:
-        file.write(
-            uploaded_file.getbuffer(),
-        )
+    with open(target_path, "wb") as file:
+        file.write(uploaded_file.getbuffer())
 
-    return str(
-        target_path,
-    )
+    return str(target_path)
 
 
 def write_output_file(
@@ -192,10 +172,7 @@ def write_output_file(
         exist_ok=True,
     )
 
-    path = (
-        output_dir
-        / file_name
-    )
+    path = output_dir / file_name
 
     path.write_text(
         content,
@@ -205,33 +182,16 @@ def write_output_file(
     return path
 
 
-def build_sets_summary(
-    metadata,
-) -> list[str]:
-    all_sets = set()
+def build_sets_summary(metadata) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
 
-    for record in metadata.records:
-        for membership in record.set_memberships:
-            all_sets.add(
-                membership.set_name,
-            )
-
-    return sorted(
-        all_sets,
-    )
-
-
-def build_relationship_rows(
-    relationships,
-) -> list[dict[str, str]]:
-    rows = []
-
-    for relationship in relationships:
+    for relationship in metadata.relationships:
         rows.append(
             {
-                "Owner Record": relationship.owner_record,
-                "Member Record": relationship.member_record,
-                "Set Name": relationship.set_name,
+                "set_name": getattr(relationship, "set_name", ""),
+                "owner_record": getattr(relationship, "owner_record", ""),
+                "member_record": getattr(relationship, "member_record", ""),
+                "cardinality": getattr(relationship, "cardinality", ""),
             }
         )
 
@@ -327,6 +287,19 @@ def generate_outputs(
         step_start,
     )
 
+    excel_mapping_service = ExcelSheetMappingService()
+
+    excel_mapping_rows = excel_mapping_service.build(
+        metadata=metadata,
+        db2_model=db2_model,
+    )
+
+    step_start = log_timing(
+        timings,
+        "Generate Excel Sheet Mapping",
+        step_start,
+    )
+
     phase2_metadata_generator = Phase2MetadataGenerator()
 
     phase2_metadata_json = phase2_metadata_generator.generate_json(
@@ -363,40 +336,30 @@ def generate_outputs(
         step_start,
     )
 
-    converted_cobol = ""
-    validation_messages = []
+    phase2_bridge = Phase2ConversionBridge()
 
-    try:
-        phase2_bridge = Phase2ConversionBridge()
-
-        converted_cobol, validation_messages = phase2_bridge.convert(
-            cobol_text=cobol_text,
-            canonical_json=canonical_json,
-            phase2_metadata_json=phase2_metadata_json,
-            ddl_text=ddl_text,
-            idms_schema_text=None,
-            relationship_overrides_json=None,
-            target_program=None,
-            use_ddl=True,
-            use_idms_schema=False,
-            use_overrides=False,
-        )
-
-    except Exception as ex:
-        converted_cobol = ""
-        validation_messages = [
-            f"Phase 2 COBOL conversion failed: {ex}",
-        ]
-
-    step_start = log_timing(
-        timings,
-        "Phase 2 COBOL conversion",
-        step_start,
+    converted_cobol, validation_messages = phase2_bridge.convert(
+        cobol_text=cobol_text,
+        canonical_json=canonical_json,
+        phase2_metadata_json=phase2_metadata_json,
+        ddl_text=ddl_text,
+        idms_schema_text=None,
+        relationship_overrides_json=None,
+        target_program=None,
+        use_ddl=True,
+        use_idms_schema=False,
+        use_overrides=False,
     )
 
     validation_messages = split_phase2_timings(
         validation_messages=validation_messages,
         timings=timings,
+    )
+
+    step_start = log_timing(
+        timings,
+        "Convert COBOL to DB2 COBOL",
+        step_start,
     )
 
     relationships = metadata.relationships
@@ -451,25 +414,17 @@ def generate_outputs(
     er_image_bytes = None
 
     try:
-        er_path = (
-            output_dir
-            / ER_DIAGRAM_FILE
-        )
+        er_path = output_dir / ER_DIAGRAM_FILE
 
         er_png_path = generate_er_diagram(
             metadata,
             str(er_path),
         )
 
-        with open(
-            er_png_path,
-            "rb",
-        ) as image_file:
+        with open(er_png_path, "rb") as image_file:
             er_image_bytes = image_file.read()
 
-        output_files["er_diagram"] = Path(
-            er_png_path,
-        )
+        output_files["er_diagram"] = Path(er_png_path)
 
     except Exception as ex:
         warnings.append(
@@ -497,20 +452,15 @@ def generate_outputs(
     st.session_state.converted_cobol = converted_cobol
     st.session_state.relationships = relationships
     st.session_state.all_sets = all_sets
-    st.session_state.record_count = len(
-        metadata.records,
-    )
-    st.session_state.set_count = len(
-        all_sets,
-    )
-    st.session_state.relationship_count = len(
-        relationships,
-    )
+    st.session_state.record_count = len(metadata.records)
+    st.session_state.set_count = len(all_sets)
+    st.session_state.relationship_count = len(relationships)
     st.session_state.validation_messages = validation_messages
     st.session_state.generation_warnings = warnings
     st.session_state.er_png_path = er_png_path
     st.session_state.er_image_bytes = er_image_bytes
     st.session_state.output_files = output_files
+    st.session_state.excel_mapping_rows = excel_mapping_rows
 
     total_elapsed = perf_counter() - total_start
 
@@ -523,9 +473,7 @@ def generate_outputs(
     print("=" * 80)
 
     for item in timings:
-        print(
-            item,
-        )
+        print(item)
 
     st.session_state.generation_timings = timings
 
@@ -544,9 +492,7 @@ def render_download_button(
         )
         return
 
-    path = Path(
-        path,
-    )
+    path = Path(path)
 
     if not path.exists():
         st.button(
@@ -556,13 +502,10 @@ def render_download_button(
         )
         return
 
-    with open(
-        path,
-        "rb",
-    ) as file:
+    with open(path, "rb") as file:
         st.download_button(
             label=label,
-            data=file,
+            data=file.read(),
             file_name=file_name,
             mime=mime,
             use_container_width=True,
@@ -570,11 +513,6 @@ def render_download_button(
 
 
 def render_download_buttons() -> None:
-    if not st.session_state.generated:
-        return
-
-    st.markdown("### Download Outputs")
-
     output_files = st.session_state.output_files
 
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -584,12 +522,12 @@ def render_download_buttons() -> None:
             label="DB2 DDL",
             path=output_files.get("ddl"),
             file_name="db2_ddl.sql",
-            mime="text/sql",
+            mime="text/plain",
         )
 
     with col2:
         render_download_button(
-            label="Phase Metadata",
+            label="Phase 2 Metadata",
             path=output_files.get("phase2_metadata"),
             file_name=PHASE2_METADATA_FILE,
             mime="application/json",
@@ -657,9 +595,7 @@ def render_status_panel() -> None:
             expanded=False,
         ):
             for warning in st.session_state.generation_warnings:
-                st.warning(
-                    warning,
-                )
+                st.warning(warning)
 
     if not st.session_state.validation_messages:
         st.success(
@@ -676,7 +612,8 @@ def render_main_tab() -> None:
     st.markdown("## Generate Modernization Outputs")
 
     st.info(
-        "Upload the Schema Listing PDF and COBOL Code PDF to generate DB2 DDL, metadata, ER diagram, and converted DB2 COBOL."
+        "Upload the Schema Listing PDF and COBOL Code PDF to generate DB2 "
+        "DDL, metadata, ER diagram, Excel Sheet Mapping, and converted DB2 COBOL."
     )
 
     col1, col2 = st.columns(2)
@@ -731,9 +668,7 @@ def render_main_tab() -> None:
                 st.error(
                     "Generation failed.",
                 )
-                st.exception(
-                    ex,
-                )
+                st.exception(ex)
                 st.stop()
 
     if st.session_state.generated:
@@ -794,89 +729,6 @@ def render_metadata_overview_tab() -> None:
         st.session_state.all_sets,
     )
 
-    st.divider()
-
-    st.markdown("### Detected Relationships")
-
-    relationship_rows = build_relationship_rows(
-        st.session_state.relationships,
-    )
-
-    if relationship_rows:
-        st.dataframe(
-            relationship_rows,
-            use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.info(
-            "No relationships detected.",
-        )
-
-    st.divider()
-
-    st.markdown("### Records & Fields")
-
-    metadata = st.session_state.metadata
-
-    record_names = [
-        record.name
-        for record in metadata.records
-    ]
-
-    selected_record = st.selectbox(
-        "Select a record",
-        options=record_names,
-    )
-
-    selected_record_obj = None
-
-    for record in metadata.records:
-        if record.name == selected_record:
-            selected_record_obj = record
-            break
-
-    if selected_record_obj is not None:
-        st.write(
-            f"Fields found: `{len(selected_record_obj.fields)}`",
-        )
-
-        field_rows = []
-
-        for field in selected_record_obj.fields:
-            field_rows.append(
-                {
-                    "Field": field.name,
-                    "Datatype": field.datatype,
-                    "Length": field.length,
-                    "Scale": field.scale,
-                    "Picture": field.picture,
-                }
-            )
-
-        st.dataframe(
-            field_rows,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-    with st.expander(
-        "View all records and fields as JSON",
-        expanded=False,
-    ):
-        st.json(
-            [
-                {
-                    "record": record.name,
-                    "fields": [
-                        field.model_dump()
-                        for field in record.fields
-                    ],
-                }
-                for record in metadata.records
-            ]
-        )
-
 
 def render_ddl_tab() -> None:
     if not st.session_state.generated:
@@ -890,6 +742,30 @@ def render_ddl_tab() -> None:
     st.code(
         st.session_state.ddl_text,
         language="sql",
+    )
+
+
+def render_excel_sheet_mapping_tab() -> None:
+    if not st.session_state.generated:
+        st.info(
+            "Generate outputs from the Main tab first.",
+        )
+        return
+
+    st.markdown("## Excel Sheet Mapping")
+
+    rows = st.session_state.excel_mapping_rows
+
+    if not rows:
+        st.info(
+            "No mapping rows generated.",
+        )
+        return
+
+    st.dataframe(
+        rows,
+        use_container_width=True,
+        hide_index=True,
     )
 
 
@@ -923,7 +799,8 @@ def render_er_diagram_tab() -> None:
         )
     else:
         st.warning(
-            "ER diagram was not generated. Graphviz may not be installed or configured.",
+            "ER diagram was not generated. Graphviz may not be installed "
+            "or configured.",
         )
 
 
@@ -989,10 +866,7 @@ def render_validation_tab() -> None:
                 f"- {message}",
             )
 
-    if (
-        not has_generation_warnings
-        and not has_validation_messages
-    ):
+    if not has_generation_warnings and not has_validation_messages:
         st.success(
             "No warnings or validation messages.",
         )
@@ -1008,11 +882,12 @@ def main() -> None:
     )
 
     st.title(
-        "IDMS ➜ DB2 Modernizer",
+        "IDMS > DB2 Modernizer",
     )
 
     st.caption(
-        "Generate DB2 DDL, Phase 2 metadata, canonical JSON, ER diagram, and converted DB2 COBOL from uploaded PDFs."
+        "Generate DB2 DDL, Phase 2 metadata, canonical JSON, ER diagram, "
+        "Excel Sheet Mapping, and converted DB2 COBOL from uploaded PDFs."
     )
 
     tabs = st.tabs(
@@ -1020,6 +895,7 @@ def main() -> None:
             "Main",
             "Metadata Overview",
             "DB2 DDL",
+            "Excel Sheet Mapping",
             "Phase 2 Metadata",
             "ER Diagram",
             "Converted DB2 COBOL",
@@ -1037,15 +913,18 @@ def main() -> None:
         render_ddl_tab()
 
     with tabs[3]:
-        render_phase2_metadata_tab()
+        render_excel_sheet_mapping_tab()
 
     with tabs[4]:
-        render_er_diagram_tab()
+        render_phase2_metadata_tab()
 
     with tabs[5]:
-        render_converted_cobol_tab()
+        render_er_diagram_tab()
 
     with tabs[6]:
+        render_converted_cobol_tab()
+
+    with tabs[7]:
         render_validation_tab()
 
 

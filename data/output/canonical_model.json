@@ -160,32 +160,32 @@
         },
         {
           "name": "DENTIST_LICENSE_NUMBER_0405",
-          "datatype": "INTEGER",
-          "length": 6,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "NUMBER_OF_PROCEDURES_0405",
-          "datatype": "INTEGER",
-          "length": 2,
+          "datatype": "DECIMAL",
+          "length": 1,
           "scale": 0,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "TOOTH_NUMBER_0405",
-          "datatype": "INTEGER",
-          "length": 2,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "PROCEDURE_CODE_0405",
-          "datatype": "VARCHAR",
-          "length": 4,
+          "datatype": "SMALLINT",
+          "length": null,
           "scale": null,
           "occurs": false,
           "occurs_max": null
@@ -201,8 +201,8 @@
         {
           "name": "FEE_0405",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         }
@@ -216,9 +216,9 @@
       "fields": [
         {
           "name": "DEPT_ID_0410",
-          "datatype": "INTEGER",
-          "length": 4,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
@@ -232,9 +232,9 @@
         },
         {
           "name": "DEPT_HEAD_ID_0410",
-          "datatype": "INTEGER",
-          "length": 4,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         }
@@ -272,9 +272,9 @@
         },
         {
           "name": "EMP_ID_0415",
-          "datatype": "INTEGER",
-          "length": 4,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
@@ -336,8 +336,8 @@
         },
         {
           "name": "EMP_PHONE_0415",
-          "datatype": "VARCHAR",
-          "length": 10,
+          "datatype": "SMALLINT",
+          "length": null,
           "scale": null,
           "occurs": false,
           "occurs_max": null
@@ -352,8 +352,8 @@
         },
         {
           "name": "SS_NUMBER_0415",
-          "datatype": "VARCHAR",
-          "length": 9,
+          "datatype": "SMALLINT",
+          "length": null,
           "scale": null,
           "occurs": false,
           "occurs_max": null
@@ -384,17 +384,17 @@
         },
         {
           "name": "SALARY_GRADE_0420",
-          "datatype": "INTEGER",
-          "length": 2,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "SALARY_AMOUNT_0420",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
@@ -402,7 +402,7 @@
           "name": "BONUS_PERCENT_0420",
           "datatype": "DECIMAL",
           "length": 3,
-          "scale": 0,
+          "scale": 3,
           "occurs": false,
           "occurs_max": null
         },
@@ -410,7 +410,7 @@
           "name": "COMMISSION_PERCENT_0420",
           "datatype": "DECIMAL",
           "length": 3,
-          "scale": 0,
+          "scale": 3,
           "occurs": false,
           "occurs_max": null
         },
@@ -418,7 +418,7 @@
           "name": "OVERTIME_RATE_0420",
           "datatype": "DECIMAL",
           "length": 3,
-          "scale": 0,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         }
@@ -577,7 +577,7 @@
         {
           "name": "WARD_DAYS_0430",
           "datatype": "DECIMAL",
-          "length": 3,
+          "length": 5,
           "scale": 0,
           "occurs": false,
           "occurs_max": null
@@ -585,23 +585,23 @@
         {
           "name": "WARD_RATE_0430",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "WARD_TOTAL_0430",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "SEMI_DAYS_0430",
           "datatype": "DECIMAL",
-          "length": 3,
+          "length": 5,
           "scale": 0,
           "occurs": false,
           "occurs_max": null
@@ -609,40 +609,40 @@
         {
           "name": "SEMI_RATE_0430",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "SEMI_TOTAL_0430",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "DELIVERY_COST_0430",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "ANESTHESIA_COST_0430",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "LAB_COST_0430",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         }
@@ -712,49 +712,49 @@
         },
         {
           "name": "INS_CO_PHONE_0435",
-          "datatype": "VARCHAR",
-          "length": 10,
+          "datatype": "SMALLINT",
+          "length": null,
           "scale": null,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "GROUP_NUMBER_0435",
-          "datatype": "INTEGER",
-          "length": 6,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "DEDUCT_0435",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "MAXIMUM_LIFE_COST_0435",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "FAMILY_COST_0435",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "DEP_COST_0435",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         }
@@ -768,9 +768,9 @@
       "fields": [
         {
           "name": "JOB_ID_0440",
-          "datatype": "INTEGER",
-          "length": 4,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
@@ -800,41 +800,41 @@
         },
         {
           "name": "MINIMUM_SALARY_0440",
-          "datatype": "INTEGER",
-          "length": 8,
-          "scale": 0,
+          "datatype": "DECIMAL",
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "MAXIMUM_SALARY_0440",
-          "datatype": "INTEGER",
-          "length": 8,
-          "scale": 0,
+          "datatype": "DECIMAL",
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "SALARY_GRADES_0440",
-          "datatype": "INTEGER",
-          "length": 8,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "NUMBER_OF_POSITIONS_0440",
-          "datatype": "INTEGER",
-          "length": 3,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "NUMBER_OPEN_0440",
-          "datatype": "INTEGER",
-          "length": 3,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         }
@@ -960,9 +960,9 @@
         },
         {
           "name": "PHYSICIAN_ID_0445",
-          "datatype": "INTEGER",
-          "length": 6,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
@@ -976,16 +976,16 @@
         },
         {
           "name": "NUMBER_OF_PROCEDURES_0445",
-          "datatype": "INTEGER",
-          "length": 2,
+          "datatype": "DECIMAL",
+          "length": 1,
           "scale": 0,
           "occurs": false,
           "occurs_max": null
         },
         {
           "name": "PROCEDURE_CODE_0445",
-          "datatype": "VARCHAR",
-          "length": 4,
+          "datatype": "SMALLINT",
+          "length": null,
           "scale": null,
           "occurs": false,
           "occurs_max": null
@@ -1001,8 +1001,8 @@
         {
           "name": "FEE_0445",
           "datatype": "DECIMAL",
-          "length": 5,
-          "scale": 0,
+          "length": 2,
+          "scale": 2,
           "occurs": false,
           "occurs_max": null
         }
@@ -1064,8 +1064,8 @@
         },
         {
           "name": "OFFICE_PHONE_0450",
-          "datatype": "VARCHAR",
-          "length": 21,
+          "datatype": "SMALLINT",
+          "length": null,
           "scale": null,
           "occurs": false,
           "occurs_max": null
@@ -1096,9 +1096,9 @@
       "fields": [
         {
           "name": "SKILL_ID_0455",
-          "datatype": "INTEGER",
-          "length": 4,
-          "scale": 0,
+          "datatype": "SMALLINT",
+          "length": null,
+          "scale": null,
           "occurs": false,
           "occurs_max": null
         },
@@ -1147,33 +1147,9 @@
   ],
   "sets": [
     {
-      "name": "SKILL-EXPERTISE",
-      "owner_record": "SKILL",
-      "member_record": "EXPERTISE",
-      "order_mode": null
-    },
-    {
-      "name": "EMP-EMPOSITION",
+      "name": "EMP-COVERAGE",
       "owner_record": "EMPLOYEE",
-      "member_record": "EMPOSITION",
-      "order_mode": null
-    },
-    {
-      "name": "OFFICE-EMPLOYEE",
-      "owner_record": "OFFICE",
-      "member_record": "EMPLOYEE",
-      "order_mode": null
-    },
-    {
-      "name": "JOB-EMPOSITION",
-      "owner_record": "JOB",
-      "member_record": "EMPOSITION",
-      "order_mode": null
-    },
-    {
-      "name": "MANAGES",
-      "owner_record": "EMPLOYEE",
-      "member_record": "STRUCTURE",
+      "member_record": "COVERAGE",
       "order_mode": null
     },
     {
@@ -1183,21 +1159,15 @@
       "order_mode": null
     },
     {
-      "name": "EMP-EXPERTISE",
+      "name": "EMP-EMPOSITION",
       "owner_record": "EMPLOYEE",
-      "member_record": "EXPERTISE",
+      "member_record": "EMPOSITION",
       "order_mode": null
     },
     {
-      "name": "REPORTS-TO",
-      "owner_record": "EMPLOYEE",
-      "member_record": "STRUCTURE",
-      "order_mode": null
-    },
-    {
-      "name": "EMP-COVERAGE",
-      "owner_record": "EMPLOYEE",
-      "member_record": "COVERAGE",
+      "name": "JOB-EMPOSITION",
+      "owner_record": "JOB",
+      "member_record": "EMPOSITION",
       "order_mode": null
     },
     {
@@ -1217,37 +1187,43 @@
       "owner_record": "COVERAGE",
       "member_record": "NON_HOSP_CLAIM",
       "order_mode": null
+    },
+    {
+      "name": "MANAGES",
+      "owner_record": "EMPLOYEE",
+      "member_record": "STRUCTURE",
+      "order_mode": null
+    },
+    {
+      "name": "OFFICE-EMPLOYEE",
+      "owner_record": "OFFICE",
+      "member_record": "EMPLOYEE",
+      "order_mode": null
+    },
+    {
+      "name": "SKILL-EXPERTISE",
+      "owner_record": "SKILL",
+      "member_record": "EXPERTISE",
+      "order_mode": null
+    },
+    {
+      "name": "REPORTS-TO",
+      "owner_record": "EMPLOYEE",
+      "member_record": "STRUCTURE",
+      "order_mode": null
+    },
+    {
+      "name": "EMP-EXPERTISE",
+      "owner_record": "EMPLOYEE",
+      "member_record": "EXPERTISE",
+      "order_mode": null
     }
   ],
   "relationships": [
     {
-      "set_name": "SKILL-EXPERTISE",
-      "parent_record": "SKILL",
-      "child_record": "EXPERTISE",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "EMP-EMPOSITION",
+      "set_name": "EMP-COVERAGE",
       "parent_record": "EMPLOYEE",
-      "child_record": "EMPOSITION",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "OFFICE-EMPLOYEE",
-      "parent_record": "OFFICE",
-      "child_record": "EMPLOYEE",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "JOB-EMPOSITION",
-      "parent_record": "JOB",
-      "child_record": "EMPOSITION",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "MANAGES",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
+      "child_record": "COVERAGE",
       "cardinality": "1:N"
     },
     {
@@ -1257,21 +1233,15 @@
       "cardinality": "1:N"
     },
     {
-      "set_name": "EMP-EXPERTISE",
+      "set_name": "EMP-EMPOSITION",
       "parent_record": "EMPLOYEE",
-      "child_record": "EXPERTISE",
+      "child_record": "EMPOSITION",
       "cardinality": "1:N"
     },
     {
-      "set_name": "REPORTS-TO",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "EMP-COVERAGE",
-      "parent_record": "EMPLOYEE",
-      "child_record": "COVERAGE",
+      "set_name": "JOB-EMPOSITION",
+      "parent_record": "JOB",
+      "child_record": "EMPOSITION",
       "cardinality": "1:N"
     },
     {
@@ -1290,6 +1260,36 @@
       "set_name": "COVERAGE-CLAIMS",
       "parent_record": "COVERAGE",
       "child_record": "NON_HOSP_CLAIM",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "MANAGES",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "OFFICE-EMPLOYEE",
+      "parent_record": "OFFICE",
+      "child_record": "EMPLOYEE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "SKILL-EXPERTISE",
+      "parent_record": "SKILL",
+      "child_record": "EXPERTISE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "REPORTS-TO",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "EMP-EXPERTISE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EXPERTISE",
       "cardinality": "1:N"
     }
   ]
