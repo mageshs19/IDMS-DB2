@@ -1147,21 +1147,51 @@
   ],
   "sets": [
     {
-      "name": "EMP-COVERAGE",
-      "owner_record": "EMPLOYEE",
-      "member_record": "COVERAGE",
-      "order_mode": null
-    },
-    {
       "name": "DEPT-EMPLOYEE",
       "owner_record": "DEPARTMENT",
       "member_record": "EMPLOYEE",
       "order_mode": null
     },
     {
+      "name": "MANAGES",
+      "owner_record": "EMPLOYEE",
+      "member_record": "STRUCTURE",
+      "order_mode": null
+    },
+    {
+      "name": "OFFICE-EMPLOYEE",
+      "owner_record": "OFFICE",
+      "member_record": "EMPLOYEE",
+      "order_mode": null
+    },
+    {
+      "name": "EMP-EXPERTISE",
+      "owner_record": "EMPLOYEE",
+      "member_record": "EXPERTISE",
+      "order_mode": null
+    },
+    {
+      "name": "SKILL-EXPERTISE",
+      "owner_record": "SKILL",
+      "member_record": "EXPERTISE",
+      "order_mode": null
+    },
+    {
       "name": "EMP-EMPOSITION",
       "owner_record": "EMPLOYEE",
       "member_record": "EMPOSITION",
+      "order_mode": null
+    },
+    {
+      "name": "REPORTS-TO",
+      "owner_record": "EMPLOYEE",
+      "member_record": "STRUCTURE",
+      "order_mode": null
+    },
+    {
+      "name": "EMP-COVERAGE",
+      "owner_record": "EMPLOYEE",
+      "member_record": "COVERAGE",
       "order_mode": null
     },
     {
@@ -1187,45 +1217,9 @@
       "owner_record": "COVERAGE",
       "member_record": "NON_HOSP_CLAIM",
       "order_mode": null
-    },
-    {
-      "name": "MANAGES",
-      "owner_record": "EMPLOYEE",
-      "member_record": "STRUCTURE",
-      "order_mode": null
-    },
-    {
-      "name": "OFFICE-EMPLOYEE",
-      "owner_record": "OFFICE",
-      "member_record": "EMPLOYEE",
-      "order_mode": null
-    },
-    {
-      "name": "SKILL-EXPERTISE",
-      "owner_record": "SKILL",
-      "member_record": "EXPERTISE",
-      "order_mode": null
-    },
-    {
-      "name": "REPORTS-TO",
-      "owner_record": "EMPLOYEE",
-      "member_record": "STRUCTURE",
-      "order_mode": null
-    },
-    {
-      "name": "EMP-EXPERTISE",
-      "owner_record": "EMPLOYEE",
-      "member_record": "EXPERTISE",
-      "order_mode": null
     }
   ],
   "relationships": [
-    {
-      "set_name": "EMP-COVERAGE",
-      "parent_record": "EMPLOYEE",
-      "child_record": "COVERAGE",
-      "cardinality": "1:N"
-    },
     {
       "set_name": "DEPT-EMPLOYEE",
       "parent_record": "DEPARTMENT",
@@ -1233,9 +1227,45 @@
       "cardinality": "1:N"
     },
     {
+      "set_name": "MANAGES",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "OFFICE-EMPLOYEE",
+      "parent_record": "OFFICE",
+      "child_record": "EMPLOYEE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "EMP-EXPERTISE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EXPERTISE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "SKILL-EXPERTISE",
+      "parent_record": "SKILL",
+      "child_record": "EXPERTISE",
+      "cardinality": "1:N"
+    },
+    {
       "set_name": "EMP-EMPOSITION",
       "parent_record": "EMPLOYEE",
       "child_record": "EMPOSITION",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "REPORTS-TO",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "cardinality": "1:N"
+    },
+    {
+      "set_name": "EMP-COVERAGE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "COVERAGE",
       "cardinality": "1:N"
     },
     {
@@ -1260,36 +1290,6 @@
       "set_name": "COVERAGE-CLAIMS",
       "parent_record": "COVERAGE",
       "child_record": "NON_HOSP_CLAIM",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "MANAGES",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "OFFICE-EMPLOYEE",
-      "parent_record": "OFFICE",
-      "child_record": "EMPLOYEE",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "SKILL-EXPERTISE",
-      "parent_record": "SKILL",
-      "child_record": "EXPERTISE",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "REPORTS-TO",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
-      "cardinality": "1:N"
-    },
-    {
-      "set_name": "EMP-EXPERTISE",
-      "parent_record": "EMPLOYEE",
-      "child_record": "EXPERTISE",
       "cardinality": "1:N"
     }
   ]

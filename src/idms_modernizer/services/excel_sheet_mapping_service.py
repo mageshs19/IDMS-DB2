@@ -17,13 +17,21 @@ class ExcelSheetMappingService:
     """
     Builds the Excel Sheet Mapping table as rows.
 
-    Fixes included:
-    - Cobol Zone now shows COBOL field mapping value instead of region.
-      Example: 02 SELECTION-DATE-0400
-    - YEAR / MONTH / DAY date child fields are mapped to consolidated DB2 DATE column.
+    Behavior:
+
+    - Cobol Zone shows the original COBOL field with level number.
+      Example: 03 SELECTION-YEAR-0400
+
+    - YEAR / MONTH / DAY date child fields are mapped to consolidated DB2
+      DATE columns.
       Example: SELECTION-YEAR-0400 maps to SELECTION_DATE_0400.
-    - New DB2_Field_name and New DB2 Data Type are populated for date child rows.
-    - New DB2 Record remains populated from the matched DB2 table.
+
+    - IDMS Key shows only corresponding IDMS key labels:
+      CALC appears only on the field matching record.primary_key.
+      SET appears only on the field mapped to a DB2 FK column.
+
+    - DB2 Key shows PK, FK, or PK/FK based on DB2Table.primary_key,
+      DB2Column.primary_key, and DB2Table.foreign_keys.
     """
 
     COLUMNS = [
@@ -89,7 +97,9 @@ class ExcelSheetMappingService:
             )
 
             column_lookup = (
-                self.build_column_lookup(table)
+                self.build_column_lookup(
+                    table=table,
+                )
                 if table is not None
                 else {}
             )
@@ -114,42 +124,69 @@ class ExcelSheetMappingService:
                     db2_column=db2_column,
                 )
 
-                row["IDMS Key"] = record.primary_key or ""
-
-                row["IDMS PIC Clause"] = field.picture or ""
-
-                row["Length of Field Bytes"] = (
-                    str(field.length)
-                    if field.length is not None
-                    else ""
+                row["IDMS Key"] = self.idms_key_label(
+                    record=record,
+                    field=field,
+                    table=table,
+                    db2_column=db2_column,
                 )
 
-                row["Field end position"] = (
-                    str(field.end_position)
-                    if field.end_position is not None
-                    else ""
+                row["IDMS PIC Clause"] = self.get_field_picture(
+                    field=field,
                 )
 
-                if table is not None:
-                    row["New DB2 Record"] = table.name or ""
-
-                if db2_column is not None:
-                    row["New DB2_Field_name"] = db2_column.name or ""
-                    row["New DB2 Data Type"] = db2_column.datatype or ""
-
-                    row["DB2 Key"] = self.db2_key_label(
-                        table=table,
-                        column=db2_column,
+                row["Length of Field Bytes"] = self.to_string(
+                    self.get_field_length(
+                        field=field,
                     )
+                )
+
+                row["Field end position"] = self.to_string(
+                    self.get_field_end_position(
+                        field=field,
+                    )
+                )
+
+                row["DB2 Key"] = self.db2_key_label(
+                    table=table,
+                    column=db2_column,
+                )
+
+                row["New DB2 Record"] = (
+                    table.name
+                    if table is not None and getattr(table, "name", None)
+                    else ""
+                )
+
+                row["New DB2_Field_name"] = (
+                    db2_column.name
+                    if db2_column is not None and getattr(db2_column, "name", None)
+                    else ""
+                )
+
+                row["New DB2 Data Type"] = self.get_db2_datatype(
+                    db2_column=db2_column,
+                )
+
+                row["Hopex Expression TypeRemark"] = ""
 
                 row["Relation"] = relationship_lookup.get(
                     record_name,
                     "",
                 )
 
-                row["Basetype"] = field.basetype or ""
+                row["Reference Field Name (CopyBook)"] = ""
+                row["Reference Field PIC Clause"] = ""
+                row["Cross Application DB2 Field Name"] = ""
+                row["Cross Appln DB2 Data Type"] = ""
 
-                rows.append(row)
+                row["Basetype"] = self.get_field_basetype(
+                    field=field,
+                )
+
+                rows.append(
+                    row,
+                )
 
         return rows
 
@@ -174,6 +211,12 @@ class ExcelSheetMappingService:
 
             lookup[normalized_table_name] = table
 
+            suffix_removed_table_name = self.remove_record_suffix(
+                normalized_table_name,
+            )
+
+            lookup[suffix_removed_table_name] = table
+
         return lookup
 
     def build_column_lookup(
@@ -196,6 +239,94 @@ class ExcelSheetMappingService:
             lookup[suffix_removed_name] = column
 
         return lookup
+
+    def build_relationship_lookup(
+        self,
+        metadata: SchemaMetadata,
+    ) -> dict[str, str]:
+        lookup: dict[str, str] = {}
+
+        for record in metadata.records:
+            record_name = NameNormalizer.normalize(
+                record.name,
+            )
+
+            relation_values: list[str] = []
+
+            for membership in getattr(record, "set_memberships", []) or []:
+                relation_value = self.format_relationship(
+                    membership=membership,
+                )
+
+                if relation_value:
+                    relation_values.append(
+                        relation_value,
+                    )
+
+            lookup[record_name] = "; ".join(
+                relation_values,
+            )
+
+        return lookup
+
+    def format_relationship(
+        self,
+        membership,
+    ) -> str:
+        relation_type = (
+            getattr(membership, "relation_type", None)
+            or getattr(membership, "type", None)
+            or ""
+        )
+
+        set_name = (
+            getattr(membership, "set_name", None)
+            or getattr(membership, "name", None)
+            or ""
+        )
+
+        owner_record = (
+            getattr(membership, "owner_record", None)
+            or getattr(membership, "owner", None)
+            or ""
+        )
+
+        member_record = (
+            getattr(membership, "member_record", None)
+            or getattr(membership, "member", None)
+            or ""
+        )
+
+        relation_type = str(relation_type).upper()
+        set_name = str(set_name)
+        owner_record = str(owner_record)
+        member_record = str(member_record)
+
+        if not set_name:
+            return ""
+
+        if relation_type == "OWNER":
+            if member_record:
+                return f"OWNER:{set_name}->{member_record}"
+
+            return f"OWNER:{set_name}"
+
+        if relation_type == "MEMBER":
+            if owner_record:
+                return f"MEMBER:{set_name}<-{owner_record}"
+
+            return f"MEMBER:{set_name}"
+
+        if owner_record and member_record:
+            return f"{relation_type}:{set_name}:{owner_record}->{member_record}"
+
+        if owner_record:
+            return f"{relation_type}:{set_name}<-{owner_record}"
+
+        if member_record:
+            return f"{relation_type}:{set_name}->{member_record}"
+
+        return f"{relation_type}:{set_name}".strip(":")
 
     def find_matching_column(
         self,
@@ -235,32 +366,21 @@ class ExcelSheetMappingService:
         field,
         db2_column: DB2Column | None,
     ) -> str:
+        """
+        Builds the Cobol Zone value for the Excel sheet.
+
+        Important:
+        This preserves the original COBOL field name.
+
+        Example:
+        03 SELECTION-YEAR-0400 stays as 03 SELECTION-YEAR-0400.
+
+        DATE consolidation is only used for matching the DB2 column.
+        """
         field_name = field.name or ""
 
         if not field_name:
             return record.cobol_zone or ""
-
-        normalized_field_name = NameNormalizer.normalize(
-            field_name,
-        )
-
-        if db2_column is not None:
-            normalized_db2_column = NameNormalizer.normalize(
-                db2_column.name,
-            )
-
-            if (
-                self.is_date_part_name(normalized_field_name)
-                and self.is_date_column_name(normalized_db2_column)
-            ):
-                cobol_date_name = self.date_part_to_cobol_date_name(
-                    field_name,
-                )
-
-                return self.format_cobol_level_and_name(
-                    level=2,
-                    name=cobol_date_name,
-                )
 
         field_level = getattr(
             field,
@@ -276,6 +396,199 @@ class ExcelSheetMappingService:
 
         return field_name or record.cobol_zone or ""
 
+    def idms_key_label(
+        self,
+        record,
+        field,
+        table: DB2Table | None,
+        db2_column: DB2Column | None,
+    ) -> str:
+        """
+        Returns CALC, SET, or CALC; SET for the IDMS Key column.
+
+        CALC:
+        - Only when the current COBOL field matches record.primary_key.
+
+        SET:
+        - Only when the current mapped DB2 column is an FK column.
+        - This prevents SET from appearing on every field in a record.
+        """
+        labels: list[str] = []
+
+        if self.is_calc_key_field(
+            record=record,
+            field=field,
+        ):
+            labels.append(
+                "CALC",
+            )
+
+        if self.is_set_key_field(
+            table=table,
+            db2_column=db2_column,
+        ):
+            labels.append(
+                "SET",
+            )
+
+        return "; ".join(
+            labels,
+        )
+
+    def is_calc_key_field(
+        self,
+        record,
+        field,
+    ) -> bool:
+        primary_key = getattr(
+            record,
+            "primary_key",
+            None,
+        )
+
+        field_name = getattr(
+            field,
+            "name",
+            None,
+        )
+
+        if not primary_key or not field_name:
+            return False
+
+        return self.same_column_name(
+            left=primary_key,
+            right=field_name,
+        )
+
+    def is_set_key_field(
+        self,
+        table: DB2Table | None,
+        db2_column: DB2Column | None,
+    ) -> bool:
+        if table is None or db2_column is None:
+            return False
+
+        return self.is_foreign_key_column(
+            table=table,
+            column=db2_column,
+        )
+
+    def db2_key_label(
+        self,
+        table: DB2Table | None,
+        column: DB2Column | None,
+    ) -> str:
+        """
+        Returns PK, FK, or PK/FK for the DB2 Key column.
+
+        PK is detected from:
+        - column.primary_key
+        - table.primary_key matching column.name
+
+        FK is detected from:
+        - table.foreign_keys where foreign_key.column_name matches column.name
+        """
+        if table is None or column is None:
+            return ""
+
+        labels: list[str] = []
+
+        column_name = getattr(
+            column,
+            "name",
+            "",
+        )
+
+        if not column_name:
+            return ""
+
+        if self.is_primary_key_column(
+            table=table,
+            column=column,
+        ):
+            labels.append(
+                "PK",
+            )
+
+        if self.is_foreign_key_column(
+            table=table,
+            column=column,
+        ):
+            labels.append(
+                "FK",
+            )
+
+        return "/".join(
+            labels,
+        )
+
+    def is_primary_key_column(
+        self,
+        table: DB2Table,
+        column: DB2Column,
+    ) -> bool:
+        if getattr(column, "primary_key", False):
+            return True
+
+        table_primary_key = getattr(
+            table,
+            "primary_key",
+            None,
+        )
+
+        if not table_primary_key:
+            return False
+
+        return self.same_column_name(
+            left=table_primary_key,
+            right=column.name,
+        )
+
+    def is_foreign_key_column(
+        self,
+        table: DB2Table,
+        column: DB2Column,
+    ) -> bool:
+        for foreign_key in getattr(table, "foreign_keys", []) or []:
+            foreign_key_column_name = getattr(
+                foreign_key,
+                "column_name",
+                "",
+            )
+
+            if self.same_column_name(
+                left=foreign_key_column_name,
+                right=column.name,
+            ):
+                return True
+
+        return False
+
+    def same_column_name(
+        self,
+        left: str | None,
+        right: str | None,
+    ) -> bool:
+        if not left or not right:
+            return False
+
+        normalized_left = NameNormalizer.normalize(
+            left,
+        )
+
+        normalized_right = NameNormalizer.normalize(
+            right,
+        )
+
+        if normalized_left == normalized_right:
+            return True
+
+        return self.remove_record_suffix(
+            normalized_left,
+        ) == self.remove_record_suffix(
+            normalized_right,
+        )
+
     def format_cobol_level_and_name(
         self,
         level: int | str | None,
@@ -285,8 +598,12 @@ class ExcelSheetMappingService:
             return name or ""
 
         try:
-            level_value = int(level)
+            level_value = int(
+                level,
+            )
+
             return f"{level_value:02d} {name}".strip()
+
         except Exception:
             return f"{level} {name}".strip()
 
@@ -315,7 +632,9 @@ class ExcelSheetMappingService:
                 output_tokens.append(
                     self.DATE_PART_TO_DATE[upper_token],
                 )
+
                 changed = True
+
             else:
                 output_tokens.append(
                     upper_token,
@@ -324,12 +643,21 @@ class ExcelSheetMappingService:
         if not changed:
             return None
 
-        return "_".join(output_tokens)
+        return "_".join(
+            output_tokens,
+        )
 
     def date_part_to_cobol_date_name(
         self,
         field_name: str,
     ) -> str:
+        """
+        Kept only for compatibility with any existing callers.
+
+        This method converts YEAR / MONTH / DAY to DATE, but it is not used
+        for the Cobol Zone column because Cobol Zone must preserve the
+        original COBOL field.
+        """
         tokens = self.split_name_tokens(
             field_name,
         )
@@ -344,15 +672,23 @@ class ExcelSheetMappingService:
             upper_token = token.upper()
 
             if upper_token in self.DATE_PART_TO_DATE:
-                output_tokens.append("DATE")
+                output_tokens.append(
+                    "DATE",
+                )
+
                 changed = True
+
             else:
-                output_tokens.append(upper_token)
+                output_tokens.append(
+                    upper_token,
+                )
 
         if not changed:
             return field_name
 
-        return "-".join(output_tokens)
+        return "-".join(
+            output_tokens,
+        )
 
     def is_date_part_name(
         self,
@@ -362,11 +698,10 @@ class ExcelSheetMappingService:
             field_name,
         )
 
-        for token in tokens:
-            if token.upper() in self.DATE_PART_NAMES:
-                return True
-
-        return False
+        return any(
+            token.upper() in self.DATE_PART_NAMES
+            for token in tokens
+        )
 
     def is_date_column_name(
         self,
@@ -376,82 +711,34 @@ class ExcelSheetMappingService:
             column_name,
         )
 
-        for token in tokens:
-            if token.upper() == "DATE":
-                return True
-
-        return False
+        return any(
+            token.upper() == "DATE"
+            for token in tokens
+        )
 
     def split_name_tokens(
         self,
-        name: str,
+        value: str,
     ) -> list[str]:
+        normalized = NameNormalizer.normalize(
+            value,
+        )
+
         return [
             token
-            for token in re.split(r"[-_\s]+", name or "")
+            for token in re.split(
+                r"[\s_-]+",
+                normalized,
+            )
             if token
         ]
 
-    def build_relationship_lookup(
-        self,
-        metadata: SchemaMetadata,
-    ) -> dict[str, str]:
-        lookup: dict[str, list[str]] = {}
-
-        for relationship in metadata.relationships:
-            owner = NameNormalizer.normalize(
-                relationship.owner_record,
-            )
-
-            member = NameNormalizer.normalize(
-                relationship.member_record,
-            )
-
-            set_name = relationship.set_name or ""
-
-            lookup.setdefault(
-                owner,
-                [],
-            ).append(
-                f"OWNER:{set_name}->{relationship.member_record}"
-            )
-
-            lookup.setdefault(
-                member,
-                [],
-            ).append(
-                f"MEMBER:{set_name}<-{relationship.owner_record}"
-            )
-
-        return {
-            record_name: "; ".join(values)
-            for record_name, values in lookup.items()
-        }
-
-    def db2_key_label(
-        self,
-        table: DB2Table | None,
-        column: DB2Column,
-    ) -> str:
-        labels: list[str] = []
-
-        if column.primary_key:
-            labels.append("PK")
-
-        if table is not None:
-            for foreign_key in table.foreign_keys:
-                if foreign_key.column_name == column.name:
-                    labels.append("FK")
-                    break
-
-        return "/".join(labels)
-
     def remove_record_suffix(
         self,
-        name: str,
+        value: str,
     ) -> str:
         normalized = NameNormalizer.normalize(
-            name,
+            value,
         )
 
         tokens = self.split_name_tokens(
@@ -463,6 +750,103 @@ class ExcelSheetMappingService:
             and tokens[-1].isdigit()
             and len(tokens[-1]) == 4
         ):
-            return "_".join(tokens[:-1])
+            return "_".join(
+                tokens[:-1],
+            )
 
-        return "_".join(tokens)
+        return "_".join(
+            tokens,
+        )
+
+    def get_field_picture(
+        self,
+        field,
+    ) -> str:
+        return (
+            getattr(field, "picture", None)
+            or getattr(field, "pic_clause", None)
+            or getattr(field, "pic", None)
+            or ""
+        )
+
+    def get_field_length(
+        self,
+        field,
+    ):
+        return (
+            getattr(field, "length", None)
+            or getattr(field, "byte_length", None)
+            or getattr(field, "field_length", None)
+            or ""
+        )
+
+    def get_field_end_position(
+        self,
+        field,
+    ):
+        return (
+            getattr(field, "end_position", None)
+            or getattr(field, "field_end_position", None)
+            or getattr(field, "end", None)
+            or ""
+        )
+
+    def get_field_basetype(
+        self,
+        field,
+    ) -> str:
+        basetype = (
+            getattr(field, "basetype", None)
+            or getattr(field, "base_type", None)
+            or ""
+        )
+
+        if basetype:
+            return str(
+                basetype,
+            )
+
+        picture = self.get_field_picture(
+            field=field,
+        )
+
+        picture_upper = str(
+            picture,
+        ).upper()
+
+        if "X" in picture_upper:
+            return "TEXT"
+
+        if "9" in picture_upper or "V" in picture_upper:
+            return "NUMERIC"
+
+        return ""
+
+    def get_db2_datatype(
+        self,
+        db2_column: DB2Column | None,
+    ) -> str:
+        if db2_column is None:
+            return ""
+
+        datatype = (
+            getattr(db2_column, "datatype", None)
+            or getattr(db2_column, "data_type", None)
+            or getattr(db2_column, "type", None)
+            or ""
+        )
+
+        return str(
+            datatype,
+        )
+
+    def to_string(
+        self,
+        value,
+    ) -> str:
+        if value is None:
+            return ""
+
+        return str(
+            value,
+        )

@@ -1,5 +1,3 @@
-# src/idms_modernizer/app.py
-
 from pathlib import Path
 from time import perf_counter
 
@@ -29,59 +27,20 @@ from idms_modernizer.services.phase2_conversion_bridge import (
 from idms_modernizer.services.er_diagram_generator import (
     generate_er_diagram,
 )
-from idms_modernizer.generators.ddl_generator import DDLGenerator
 from idms_modernizer.services.excel_sheet_mapping_service import (
     ExcelSheetMappingService,
 )
-
-
-def log_timing(
-    timings: list[str],
-    label: str,
-    start_time: float,
-) -> float:
-    elapsed = perf_counter() - start_time
-    message = f"{label}: {elapsed:.2f} seconds"
-
-    print(message)
-
-    timings.append(message)
-
-    return perf_counter()
-
-
-def total_timing_only() -> str:
-    timings = st.session_state.get(
-        "generation_timings",
-        [],
-    )
-
-    for item in reversed(timings):
-        if item.startswith("TOTAL: "):
-            return item
-
-    return ""
-
-
-def split_phase2_timings(
-    validation_messages: list[str],
-    timings: list[str],
-) -> list[str]:
-    cleaned_messages: list[str] = []
-
-    for message in validation_messages:
-        if message.startswith("Phase 2 - "):
-            timings.append(message)
-        else:
-            cleaned_messages.append(message)
-
-    return cleaned_messages
+from idms_modernizer.generators.ddl_generator import DDLGenerator
 
 
 def initialize_directories() -> None:
-    ensure_directory(settings.input_dir)
-    ensure_directory(settings.output_dir)
-    ensure_directory(settings.temp_dir)
+    ensure_directory(
+        settings.input_dir,
+    )
+
+    ensure_directory(
+        settings.output_dir,
+    )
 
 
 def initialize_session_state() -> None:
@@ -89,14 +48,14 @@ def initialize_session_state() -> None:
         "generated": False,
         "schema_path": "",
         "cobol_pdf_path": "",
-        "cobol_text": "",
-        "converted_cobol": "",
-        "ddl_text": "",
-        "canonical_json": "",
-        "phase2_metadata_json": "",
         "metadata": None,
         "canonical_schema": None,
         "db2_model": None,
+        "ddl_text": "",
+        "canonical_json": "",
+        "phase2_metadata_json": "",
+        "cobol_text": "",
+        "converted_cobol": "",
         "relationships": [],
         "all_sets": [],
         "record_count": 0,
@@ -120,14 +79,14 @@ def reset_outputs() -> None:
     st.session_state.generated = False
     st.session_state.schema_path = ""
     st.session_state.cobol_pdf_path = ""
-    st.session_state.cobol_text = ""
-    st.session_state.converted_cobol = ""
-    st.session_state.ddl_text = ""
-    st.session_state.canonical_json = ""
-    st.session_state.phase2_metadata_json = ""
     st.session_state.metadata = None
     st.session_state.canonical_schema = None
     st.session_state.db2_model = None
+    st.session_state.ddl_text = ""
+    st.session_state.canonical_json = ""
+    st.session_state.phase2_metadata_json = ""
+    st.session_state.cobol_text = ""
+    st.session_state.converted_cobol = ""
     st.session_state.relationships = []
     st.session_state.all_sets = []
     st.session_state.record_count = 0
@@ -146,7 +105,9 @@ def save_uploaded_file(
     uploaded_file,
     target_folder: str,
 ) -> str:
-    target_dir = Path(target_folder)
+    target_dir = Path(
+        target_folder,
+    )
 
     target_dir.mkdir(
         parents=True,
@@ -155,10 +116,17 @@ def save_uploaded_file(
 
     target_path = target_dir / uploaded_file.name
 
-    with open(target_path, "wb") as file:
-        file.write(uploaded_file.getbuffer())
+    with open(
+        target_path,
+        "wb",
+    ) as output_file:
+        output_file.write(
+            uploaded_file.getbuffer(),
+        )
 
-    return str(target_path)
+    return str(
+        target_path,
+    )
 
 
 def write_output_file(
@@ -182,20 +150,190 @@ def write_output_file(
     return path
 
 
-def build_sets_summary(metadata) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
+def log_timing(
+    timings: list[str],
+    label: str,
+    step_start: float,
+) -> float:
+    elapsed = perf_counter() - step_start
 
-    for relationship in metadata.relationships:
+    timings.append(
+        f"{label}: {elapsed:.2f} seconds",
+    )
+
+    return perf_counter()
+
+
+def build_sets_summary(
+    metadata,
+) -> list[str]:
+    all_sets = set()
+
+    for record in metadata.records:
+        for membership in record.set_memberships:
+            set_name = getattr(
+                membership,
+                "set_name",
+                "",
+            )
+
+            if set_name:
+                all_sets.add(
+                    set_name,
+                )
+
+    return sorted(
+        all_sets,
+    )
+
+
+def build_relationship_rows(
+    relationships,
+) -> list[dict[str, str]]:
+    rows = []
+
+    for relationship in relationships:
         rows.append(
             {
-                "set_name": getattr(relationship, "set_name", ""),
-                "owner_record": getattr(relationship, "owner_record", ""),
-                "member_record": getattr(relationship, "member_record", ""),
-                "cardinality": getattr(relationship, "cardinality", ""),
+                "Owner Record": getattr(
+                    relationship,
+                    "owner_record",
+                    "",
+                ),
+                "Member Record": getattr(
+                    relationship,
+                    "member_record",
+                    "",
+                ),
+                "Set Name": getattr(
+                    relationship,
+                    "set_name",
+                    "",
+                ),
             }
         )
 
     return rows
+
+
+def build_mapping_row_count_by_table(
+    rows: list[dict],
+    include_total: bool = True,
+) -> list[dict[str, int | str]]:
+    """
+    Builds table-level counts from the actual Excel Sheet Mapping rows.
+
+    This count matches the detailed mapping table because it counts the
+    generated mapping rows, not only DB2 physical columns.
+
+    Output column order:
+    - Column Field Count
+    - Table Name
+    """
+    table_counts: dict[str, int] = {}
+
+    for row in rows or []:
+        table_name = (
+            row.get("New DB2 Record")
+            or row.get("Cobol Record IDMS")
+            or ""
+        )
+
+        table_name = str(
+            table_name,
+        ).strip()
+
+        if not table_name:
+            continue
+
+        table_counts[table_name] = table_counts.get(
+            table_name,
+            0,
+        ) + 1
+
+    output_rows: list[dict[str, int | str]] = []
+
+    total_count = 0
+
+    for table_name in sorted(table_counts):
+        count = table_counts[table_name]
+
+        output_rows.append(
+            {
+                "Column Field Count": count,
+                "Table Name": table_name,
+            }
+        )
+
+        total_count += count
+
+    if include_total:
+        output_rows.append(
+            {
+                "Column Field Count": total_count,
+                "Table Name": "TOTAL",
+            }
+        )
+
+    return output_rows
+
+
+def build_db2_physical_column_count_rows(
+    db2_model,
+    include_total: bool = True,
+) -> list[dict[str, int | str]]:
+    """
+    Builds table-level physical DB2 column counts.
+
+    This is separate from mapping row counts because COBOL YEAR, MONTH,
+    and DAY fields can map to one DB2 DATE column.
+    """
+    table_rows: list[dict[str, int | str]] = []
+
+    if db2_model is None:
+        return table_rows
+
+    total_count = 0
+
+    for table in getattr(
+        db2_model,
+        "tables",
+        [],
+    ) or []:
+        table_name = getattr(
+            table,
+            "name",
+            "",
+        )
+
+        columns = getattr(
+            table,
+            "columns",
+            [],
+        ) or []
+
+        count = len(
+            columns,
+        )
+
+        table_rows.append(
+            {
+                "Column Field Count": count,
+                "Table Name": table_name,
+            }
+        )
+
+        total_count += count
+
+    if include_total:
+        table_rows.append(
+            {
+                "Column Field Count": total_count,
+                "Table Name": "TOTAL",
+            }
+        )
+
+    return table_rows
 
 
 def generate_outputs(
@@ -241,7 +379,7 @@ def generate_outputs(
     canonical_builder = CanonicalSchemaBuilder()
 
     canonical_schema = canonical_builder.build(
-        metadata,
+        metadata=metadata,
     )
 
     step_start = log_timing(
@@ -250,9 +388,9 @@ def generate_outputs(
         step_start,
     )
 
-    reconciler = CanonicalReconciler()
+    canonical_reconciler = CanonicalReconciler()
 
-    canonical_schema = reconciler.reconcile(
+    canonical_schema = canonical_reconciler.reconcile(
         canonical_schema=canonical_schema,
         metadata=metadata,
     )
@@ -296,7 +434,7 @@ def generate_outputs(
 
     step_start = log_timing(
         timings,
-        "Generate Excel Sheet Mapping",
+        "Generate Excel Sheet Mapping rows",
         step_start,
     )
 
@@ -336,29 +474,34 @@ def generate_outputs(
         step_start,
     )
 
-    phase2_bridge = Phase2ConversionBridge()
+    converted_cobol = ""
+    validation_messages = []
 
-    converted_cobol, validation_messages = phase2_bridge.convert(
-        cobol_text=cobol_text,
-        canonical_json=canonical_json,
-        phase2_metadata_json=phase2_metadata_json,
-        ddl_text=ddl_text,
-        idms_schema_text=None,
-        relationship_overrides_json=None,
-        target_program=None,
-        use_ddl=True,
-        use_idms_schema=False,
-        use_overrides=False,
-    )
+    try:
+        phase2_bridge = Phase2ConversionBridge()
 
-    validation_messages = split_phase2_timings(
-        validation_messages=validation_messages,
-        timings=timings,
-    )
+        converted_cobol, validation_messages = phase2_bridge.convert(
+            cobol_text=cobol_text,
+            canonical_json=canonical_json,
+            phase2_metadata_json=phase2_metadata_json,
+            ddl_text=ddl_text,
+            idms_schema_text=None,
+            relationship_overrides_json=None,
+            target_program=None,
+            use_ddl=True,
+            use_idms_schema=False,
+            use_overrides=False,
+        )
+
+    except Exception as exc:
+        converted_cobol = ""
+        validation_messages = [
+            f"Phase 2 COBOL conversion failed: {exc}",
+        ]
 
     step_start = log_timing(
         timings,
-        "Convert COBOL to DB2 COBOL",
+        "Phase 2 COBOL conversion",
         step_start,
     )
 
@@ -418,19 +561,26 @@ def generate_outputs(
 
         er_png_path = generate_er_diagram(
             metadata,
-            str(er_path),
+            str(
+                er_path,
+            ),
         )
 
-        with open(er_png_path, "rb") as image_file:
+        with open(
+            er_png_path,
+            "rb",
+        ) as image_file:
             er_image_bytes = image_file.read()
 
-        output_files["er_diagram"] = Path(er_png_path)
+        output_files["er_diagram"] = Path(
+            er_png_path,
+        )
 
-    except Exception as ex:
+    except Exception as exc:
         warnings.append(
             "ER diagram was not generated. "
             "Graphviz may not be installed or configured. "
-            f"Details: {ex}"
+            f"Details: {exc}"
         )
 
     step_start = log_timing(
@@ -452,9 +602,15 @@ def generate_outputs(
     st.session_state.converted_cobol = converted_cobol
     st.session_state.relationships = relationships
     st.session_state.all_sets = all_sets
-    st.session_state.record_count = len(metadata.records)
-    st.session_state.set_count = len(all_sets)
-    st.session_state.relationship_count = len(relationships)
+    st.session_state.record_count = len(
+        metadata.records,
+    )
+    st.session_state.set_count = len(
+        all_sets,
+    )
+    st.session_state.relationship_count = len(
+        relationships,
+    )
     st.session_state.validation_messages = validation_messages
     st.session_state.generation_warnings = warnings
     st.session_state.er_png_path = er_png_path
@@ -467,13 +623,6 @@ def generate_outputs(
     timings.append(
         f"TOTAL: {total_elapsed:.2f} seconds",
     )
-
-    print("=" * 80)
-    print("GENERATION TIMINGS")
-    print("=" * 80)
-
-    for item in timings:
-        print(item)
 
     st.session_state.generation_timings = timings
 
@@ -492,20 +641,13 @@ def render_download_button(
         )
         return
 
-    path = Path(path)
-
-    if not path.exists():
-        st.button(
-            label,
-            disabled=True,
-            use_container_width=True,
-        )
-        return
-
-    with open(path, "rb") as file:
+    with open(
+        path,
+        "rb",
+    ) as file:
         st.download_button(
             label=label,
-            data=file.read(),
+            data=file,
             file_name=file_name,
             mime=mime,
             use_container_width=True,
@@ -513,22 +655,33 @@ def render_download_button(
 
 
 def render_download_buttons() -> None:
+    if not st.session_state.generated:
+        return
+
+    st.markdown("### Download Outputs")
+
     output_files = st.session_state.output_files
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5 = st.columns(
+        5,
+    )
 
     with col1:
         render_download_button(
             label="DB2 DDL",
-            path=output_files.get("ddl"),
+            path=output_files.get(
+                "ddl",
+            ),
             file_name="db2_ddl.sql",
-            mime="text/plain",
+            mime="text/sql",
         )
 
     with col2:
         render_download_button(
-            label="Phase 2 Metadata",
-            path=output_files.get("phase2_metadata"),
+            label="Phase Metadata",
+            path=output_files.get(
+                "phase2_metadata",
+            ),
             file_name=PHASE2_METADATA_FILE,
             mime="application/json",
         )
@@ -536,7 +689,9 @@ def render_download_buttons() -> None:
     with col3:
         render_download_button(
             label="Canonical JSON",
-            path=output_files.get("canonical"),
+            path=output_files.get(
+                "canonical",
+            ),
             file_name="canonical_model.json",
             mime="application/json",
         )
@@ -560,10 +715,22 @@ def render_download_buttons() -> None:
     with col5:
         render_download_button(
             label="DB2 COBOL",
-            path=output_files.get("converted_cobol"),
+            path=output_files.get(
+                "converted_cobol",
+            ),
             file_name="converted_db2_cobol.cbl",
             mime="text/plain",
         )
+
+
+def total_timing_only() -> str:
+    for timing in st.session_state.generation_timings:
+        if timing.startswith(
+            "TOTAL:",
+        ):
+            return timing
+
+    return ""
 
 
 def get_total_generation_time() -> str:
@@ -595,7 +762,9 @@ def render_status_panel() -> None:
             expanded=False,
         ):
             for warning in st.session_state.generation_warnings:
-                st.warning(warning)
+                st.warning(
+                    warning,
+                )
 
     if not st.session_state.validation_messages:
         st.success(
@@ -604,7 +773,7 @@ def render_status_panel() -> None:
     else:
         st.warning(
             "COBOL conversion completed with validation messages. "
-            "Open the Validation tab for details.",
+            "Open the Validation tab for details."
         )
 
 
@@ -613,10 +782,12 @@ def render_main_tab() -> None:
 
     st.info(
         "Upload the Schema Listing PDF and COBOL Code PDF to generate DB2 "
-        "DDL, metadata, ER diagram, Excel Sheet Mapping, and converted DB2 COBOL."
+        "DDL, metadata, ER diagram, converted DB2 COBOL, and sheet mapping."
     )
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(
+        2,
+    )
 
     with col1:
         schema_pdf = st.file_uploader(
@@ -664,17 +835,21 @@ def render_main_tab() -> None:
                     "Generation completed successfully.",
                 )
 
-            except Exception as ex:
+            except Exception as exc:
                 st.error(
                     "Generation failed.",
                 )
-                st.exception(ex)
+                st.exception(
+                    exc,
+                )
                 st.stop()
 
     if st.session_state.generated:
         st.markdown("### Output Status")
 
-        col_a, col_b = st.columns(2)
+        col_a, col_b = st.columns(
+            2,
+        )
 
         with col_a:
             st.write(
@@ -701,7 +876,9 @@ def render_metadata_overview_tab() -> None:
 
     st.markdown("### Summary")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(
+        4,
+    )
 
     with col1:
         st.metric(
@@ -721,12 +898,90 @@ def render_metadata_overview_tab() -> None:
             st.session_state.relationship_count,
         )
 
+    with col4:
+        st.metric(
+            "Sheet Mapping Rows",
+            len(
+                st.session_state.excel_mapping_rows,
+            ),
+        )
+
     st.divider()
 
     st.markdown("### Detected Sets")
 
     st.json(
         st.session_state.all_sets,
+    )
+
+    st.divider()
+
+    st.markdown("### Detected Relationships")
+
+    relationship_rows = build_relationship_rows(
+        st.session_state.relationships,
+    )
+
+    if relationship_rows:
+        st.dataframe(
+            relationship_rows,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info(
+            "No relationships detected.",
+        )
+
+    st.divider()
+
+    st.markdown("### Table List and Mapping Row Counts")
+
+    mapping_count_rows = build_mapping_row_count_by_table(
+        rows=st.session_state.excel_mapping_rows,
+        include_total=True,
+    )
+
+    if mapping_count_rows:
+        st.dataframe(
+            mapping_count_rows,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info(
+            "No table mapping row counts available.",
+        )
+
+    st.caption(
+        "This count is based on actual Excel Sheet Mapping rows. "
+        "The TOTAL matches the detailed mapping table."
+    )
+
+    st.divider()
+
+    st.markdown("### DB2 Physical Column Counts")
+
+    physical_count_rows = build_db2_physical_column_count_rows(
+        db2_model=st.session_state.db2_model,
+        include_total=True,
+    )
+
+    if physical_count_rows:
+        st.dataframe(
+            physical_count_rows,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info(
+            "No DB2 physical column counts available.",
+        )
+
+    st.caption(
+        "This count is based on DB2 physical columns. It can differ from "
+        "mapping row count when COBOL YEAR, MONTH, and DAY fields map to "
+        "one DB2 DATE column."
     )
 
 
@@ -742,6 +997,21 @@ def render_ddl_tab() -> None:
     st.code(
         st.session_state.ddl_text,
         language="sql",
+    )
+
+
+def render_phase2_metadata_tab() -> None:
+    if not st.session_state.generated:
+        st.info(
+            "Generate outputs from the Main tab first.",
+        )
+        return
+
+    st.markdown("## Phase 2 Metadata Preview")
+
+    st.code(
+        st.session_state.phase2_metadata_json,
+        language="json",
     )
 
 
@@ -762,25 +1032,34 @@ def render_excel_sheet_mapping_tab() -> None:
         )
         return
 
+    st.markdown("### Sheet Map Abstract")
+
+    abstract_rows = build_mapping_row_count_by_table(
+        rows=rows,
+        include_total=True,
+    )
+
+    if abstract_rows:
+        st.dataframe(
+            abstract_rows,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info(
+            "No table abstract rows available.",
+        )
+
+    st.caption(
+        "The TOTAL row matches the number of detailed mapping rows below."
+    )
+
+    st.markdown("### Sheet Mapping Details")
+
     st.dataframe(
         rows,
         use_container_width=True,
         hide_index=True,
-    )
-
-
-def render_phase2_metadata_tab() -> None:
-    if not st.session_state.generated:
-        st.info(
-            "Generate outputs from the Main tab first.",
-        )
-        return
-
-    st.markdown("## Phase 2 Metadata Preview")
-
-    st.code(
-        st.session_state.phase2_metadata_json,
-        language="json",
     )
 
 
@@ -800,7 +1079,7 @@ def render_er_diagram_tab() -> None:
     else:
         st.warning(
             "ER diagram was not generated. Graphviz may not be installed "
-            "or configured.",
+            "or configured."
         )
 
 
@@ -832,54 +1111,38 @@ def render_validation_tab() -> None:
         )
         return
 
-    st.markdown("## Validation & Warnings")
+    st.markdown("## Validation")
 
-    if st.session_state.get("generation_timings"):
+    if st.session_state.generation_timings:
         st.markdown("### Generation Timings")
 
-        for timing in st.session_state.generation_timings:
-            st.write(
-                f"- {timing}",
+        st.code(
+            "\n".join(
+                st.session_state.generation_timings,
             )
+        )
 
-    has_generation_warnings = bool(
-        st.session_state.generation_warnings,
-    )
-
-    has_validation_messages = bool(
-        st.session_state.validation_messages,
-    )
-
-    if has_generation_warnings:
-        st.markdown("### Generation Warnings")
-
-        for warning in st.session_state.generation_warnings:
-            st.warning(
-                warning,
-            )
-
-    if has_validation_messages:
-        st.markdown("### COBOL Conversion Validation Messages")
+    if st.session_state.validation_messages:
+        st.markdown("### Validation Messages")
 
         for message in st.session_state.validation_messages:
-            st.write(
-                f"- {message}",
+            st.warning(
+                message,
             )
-
-    if not has_generation_warnings and not has_validation_messages:
+    else:
         st.success(
             "No warnings or validation messages.",
         )
 
 
 def main() -> None:
-    initialize_directories()
-    initialize_session_state()
-
     st.set_page_config(
         page_title="IDMS DB2 Modernizer",
         layout="wide",
     )
+
+    initialize_directories()
+    initialize_session_state()
 
     st.title(
         "IDMS > DB2 Modernizer",
@@ -887,7 +1150,7 @@ def main() -> None:
 
     st.caption(
         "Generate DB2 DDL, Phase 2 metadata, canonical JSON, ER diagram, "
-        "Excel Sheet Mapping, and converted DB2 COBOL from uploaded PDFs."
+        "converted DB2 COBOL, and Excel-style sheet mapping from uploaded PDFs."
     )
 
     tabs = st.tabs(
@@ -895,8 +1158,8 @@ def main() -> None:
             "Main",
             "Metadata Overview",
             "DB2 DDL",
-            "Excel Sheet Mapping",
             "Phase 2 Metadata",
+            "Excel Sheet Mapping",
             "ER Diagram",
             "Converted DB2 COBOL",
             "Validation",
@@ -913,10 +1176,10 @@ def main() -> None:
         render_ddl_tab()
 
     with tabs[3]:
-        render_excel_sheet_mapping_tab()
+        render_phase2_metadata_tab()
 
     with tabs[4]:
-        render_phase2_metadata_tab()
+        render_excel_sheet_mapping_tab()
 
     with tabs[5]:
         render_er_diagram_tab()

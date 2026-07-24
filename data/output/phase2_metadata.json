@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-07-22T09:06:31.548329Z",
+  "generated_at": "2026-07-23T11:24:59.689661Z",
   "source": "PHASE1",
   "schema_source": "PHASE1_CANONICAL_DB2_METADATA",
   "record_table_map": {
@@ -573,8 +573,8 @@
           "primary_key": false
         },
         {
-          "name": "SKILL_ID_0455",
-          "column": "SKILL_ID_0455",
+          "name": "EMP_ID_0415",
+          "column": "EMP_ID_0415",
           "datatype": "SMALLINT",
           "length": 4,
           "scale": 0,
@@ -582,8 +582,8 @@
           "primary_key": false
         },
         {
-          "name": "EMP_ID_0415",
-          "column": "EMP_ID_0415",
+          "name": "SKILL_ID_0455",
+          "column": "SKILL_ID_0455",
           "datatype": "SMALLINT",
           "length": 4,
           "scale": 0,
@@ -1400,17 +1400,6 @@
   ],
   "relationships": [
     {
-      "set_name": "EMP_COVERAGE",
-      "parent_record": "EMPLOYEE",
-      "child_record": "COVERAGE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": "EMP_ID_0415",
-      "cardinality": "1:N",
-      "order_by": [
-        "EMP_ID_0415"
-      ]
-    },
-    {
       "set_name": "DEPT_EMPLOYEE",
       "parent_record": "DEPARTMENT",
       "child_record": "EMPLOYEE",
@@ -1422,9 +1411,71 @@
       ]
     },
     {
+      "set_name": "MANAGES",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "cardinality": "1:N",
+      "order_by": []
+    },
+    {
+      "set_name": "OFFICE_EMPLOYEE",
+      "parent_record": "OFFICE",
+      "child_record": "EMPLOYEE",
+      "parent_key": "OFFICE_CODE_0450",
+      "child_fk": "OFFICE_CODE_0450",
+      "cardinality": "1:N",
+      "order_by": [
+        "OFFICE_CODE_0450"
+      ]
+    },
+    {
+      "set_name": "EMP_EXPERTISE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EXPERTISE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "cardinality": "1:N",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    {
+      "set_name": "SKILL_EXPERTISE",
+      "parent_record": "SKILL",
+      "child_record": "EXPERTISE",
+      "parent_key": "SKILL_ID_0455",
+      "child_fk": "SKILL_ID_0455",
+      "cardinality": "1:N",
+      "order_by": [
+        "SKILL_ID_0455"
+      ]
+    },
+    {
       "set_name": "EMP_EMPOSITION",
       "parent_record": "EMPLOYEE",
       "child_record": "EMPOSITION",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "cardinality": "1:N",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    {
+      "set_name": "REPORTS_TO",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "cardinality": "1:N",
+      "order_by": []
+    },
+    {
+      "set_name": "EMP_COVERAGE",
+      "parent_record": "EMPLOYEE",
+      "child_record": "COVERAGE",
       "parent_key": "EMP_ID_0415",
       "child_fk": "EMP_ID_0415",
       "cardinality": "1:N",
@@ -1474,57 +1525,6 @@
       "cardinality": "1:N",
       "order_by": [
         "COVERAGE_ID"
-      ]
-    },
-    {
-      "set_name": "MANAGES",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": null,
-      "cardinality": "1:N",
-      "order_by": []
-    },
-    {
-      "set_name": "OFFICE_EMPLOYEE",
-      "parent_record": "OFFICE",
-      "child_record": "EMPLOYEE",
-      "parent_key": "OFFICE_CODE_0450",
-      "child_fk": "OFFICE_CODE_0450",
-      "cardinality": "1:N",
-      "order_by": [
-        "OFFICE_CODE_0450"
-      ]
-    },
-    {
-      "set_name": "SKILL_EXPERTISE",
-      "parent_record": "SKILL",
-      "child_record": "EXPERTISE",
-      "parent_key": "SKILL_ID_0455",
-      "child_fk": "SKILL_ID_0455",
-      "cardinality": "1:N",
-      "order_by": [
-        "SKILL_ID_0455"
-      ]
-    },
-    {
-      "set_name": "REPORTS_TO",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": null,
-      "cardinality": "1:N",
-      "order_by": []
-    },
-    {
-      "set_name": "EMP_EXPERTISE",
-      "parent_record": "EMPLOYEE",
-      "child_record": "EXPERTISE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": "EMP_ID_0415",
-      "cardinality": "1:N",
-      "order_by": [
-        "EMP_ID_0415"
       ]
     }
   ],
@@ -3025,17 +3025,38 @@
     }
   },
   "set_ordering_map": {
-    "EMP_COVERAGE": {
-      "order_by": [
-        "EMP_ID_0415"
-      ]
-    },
     "DEPT_EMPLOYEE": {
       "order_by": [
         "DEPT_ID_0410"
       ]
     },
+    "MANAGES": {
+      "order_by": []
+    },
+    "OFFICE_EMPLOYEE": {
+      "order_by": [
+        "OFFICE_CODE_0450"
+      ]
+    },
+    "EMP_EXPERTISE": {
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "SKILL_EXPERTISE": {
+      "order_by": [
+        "SKILL_ID_0455"
+      ]
+    },
     "EMP_EMPOSITION": {
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "REPORTS_TO": {
+      "order_by": []
+    },
+    "EMP_COVERAGE": {
       "order_by": [
         "EMP_ID_0415"
       ]
@@ -3049,40 +3070,9 @@
       "order_by": [
         "COVERAGE_ID"
       ]
-    },
-    "MANAGES": {
-      "order_by": []
-    },
-    "OFFICE_EMPLOYEE": {
-      "order_by": [
-        "OFFICE_CODE_0450"
-      ]
-    },
-    "SKILL_EXPERTISE": {
-      "order_by": [
-        "SKILL_ID_0455"
-      ]
-    },
-    "REPORTS_TO": {
-      "order_by": []
-    },
-    "EMP_EXPERTISE": {
-      "order_by": [
-        "EMP_ID_0415"
-      ]
     }
   },
   "navigation_intent": {
-    "EMP_COVERAGE": {
-      "access_pattern": "SET_NAVIGATION",
-      "parent_record": "EMPLOYEE",
-      "child_record": "COVERAGE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": "EMP_ID_0415",
-      "order_by": [
-        "EMP_ID_0415"
-      ]
-    },
     "DEPT_EMPLOYEE": {
       "access_pattern": "SET_NAVIGATION",
       "parent_record": "DEPARTMENT",
@@ -3093,10 +3083,66 @@
         "DEPT_ID_0410"
       ]
     },
+    "MANAGES": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "order_by": []
+    },
+    "OFFICE_EMPLOYEE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "OFFICE",
+      "child_record": "EMPLOYEE",
+      "parent_key": "OFFICE_CODE_0450",
+      "child_fk": "OFFICE_CODE_0450",
+      "order_by": [
+        "OFFICE_CODE_0450"
+      ]
+    },
+    "EMP_EXPERTISE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "EXPERTISE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "SKILL_EXPERTISE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "SKILL",
+      "child_record": "EXPERTISE",
+      "parent_key": "SKILL_ID_0455",
+      "child_fk": "SKILL_ID_0455",
+      "order_by": [
+        "SKILL_ID_0455"
+      ]
+    },
     "EMP_EMPOSITION": {
       "access_pattern": "SET_NAVIGATION",
       "parent_record": "EMPLOYEE",
       "child_record": "EMPOSITION",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": "EMP_ID_0415",
+      "order_by": [
+        "EMP_ID_0415"
+      ]
+    },
+    "REPORTS_TO": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "STRUCTURE",
+      "parent_key": "EMP_ID_0415",
+      "child_fk": null,
+      "order_by": []
+    },
+    "EMP_COVERAGE": {
+      "access_pattern": "SET_NAVIGATION",
+      "parent_record": "EMPLOYEE",
+      "child_record": "COVERAGE",
       "parent_key": "EMP_ID_0415",
       "child_fk": "EMP_ID_0415",
       "order_by": [
@@ -3122,52 +3168,6 @@
       "order_by": [
         "COVERAGE_ID"
       ]
-    },
-    "MANAGES": {
-      "access_pattern": "SET_NAVIGATION",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": null,
-      "order_by": []
-    },
-    "OFFICE_EMPLOYEE": {
-      "access_pattern": "SET_NAVIGATION",
-      "parent_record": "OFFICE",
-      "child_record": "EMPLOYEE",
-      "parent_key": "OFFICE_CODE_0450",
-      "child_fk": "OFFICE_CODE_0450",
-      "order_by": [
-        "OFFICE_CODE_0450"
-      ]
-    },
-    "SKILL_EXPERTISE": {
-      "access_pattern": "SET_NAVIGATION",
-      "parent_record": "SKILL",
-      "child_record": "EXPERTISE",
-      "parent_key": "SKILL_ID_0455",
-      "child_fk": "SKILL_ID_0455",
-      "order_by": [
-        "SKILL_ID_0455"
-      ]
-    },
-    "REPORTS_TO": {
-      "access_pattern": "SET_NAVIGATION",
-      "parent_record": "EMPLOYEE",
-      "child_record": "STRUCTURE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": null,
-      "order_by": []
-    },
-    "EMP_EXPERTISE": {
-      "access_pattern": "SET_NAVIGATION",
-      "parent_record": "EMPLOYEE",
-      "child_record": "EXPERTISE",
-      "parent_key": "EMP_ID_0415",
-      "child_fk": "EMP_ID_0415",
-      "order_by": [
-        "EMP_ID_0415"
-      ]
     }
   },
   "nullable_fk_map": {
@@ -3178,8 +3178,8 @@
     "EMPLOYEE.OFFICE_CODE_0450": true,
     "EMPOSITION.EMP_ID_0415": true,
     "EMPOSITION.JOB_ID_0440": true,
-    "EXPERTISE.SKILL_ID_0455": true,
     "EXPERTISE.EMP_ID_0415": true,
+    "EXPERTISE.SKILL_ID_0455": true,
     "HOSPITAL_CLAIM.COVERAGE_ID": true,
     "NON_HOSP_CLAIM.COVERAGE_ID": true,
     "STRUCTURE.MANAGES_EMP_ID_0415": true,
