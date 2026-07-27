@@ -19,15 +19,21 @@ class ExcelSheetMappingService:
 
     Final behavior:
     - Cobol Zone preserves original COBOL field with level number.
-    - CALC appears only when current field matches record.primary_key and
-      mapped DB2 column is physically PK.
+    - All existing metadata fields are shown in the sheet.
+    - CALC appears only when current field matches record.primary_key.
     - SET appears only when DB2 Key contains FK.
     - No synthetic FK rows are added.
     - No fallback SET is assigned to first row of a table.
-    - YEAR / MONTH / DAY / Y / M / D child fields are shown as COBOL fields,
-      but DB2 mapping columns are kept blank.
-    - Inferred outer DATE rows are added for complete date child groups and
-      mapped to DB2 DATE columns.
+    - Inner date parts are shown as COBOL fields, but DB2 mapping columns
+      are kept blank.
+    - Inferred outer DATE rows are added for complete date groups.
+    - Supports client-side date part variants:
+      YEAR / MONTH / DAY
+      YR / MO / DY
+      Y / M / D
+      YY / MM / DD
+      YYYY / MM / DD
+      DY / DM / DD
     """
 
     COLUMNS = [
@@ -50,46 +56,42 @@ class ExcelSheetMappingService:
         "Basetype",
     ]
 
-    DATE_PART_NAMES = {
-        "YEAR",
-        "MONTH",
-        "DAY",
-        "YR",
-        "MO",
-        "DY",
-        "Y",
-        "M",
-        "D",
-    }
-
-    YEAR_ALIASES = {
+    YEAR_PARTS = {
         "YEAR",
         "YR",
         "Y",
+        "YY",
+        "YYYY",
     }
 
-    MONTH_ALIASES = {
+    MONTH_PARTS = {
         "MONTH",
+        "MON",
         "MO",
         "M",
+        "MM",
     }
 
-    DAY_ALIASES = {
+    DAY_PARTS = {
         "DAY",
-        "DY",
         "D",
+        "DD",
     }
 
-    DATE_PART_TO_CANONICAL = {
-        "YEAR": "YEAR",
-        "YR": "YEAR",
-        "Y": "YEAR",
-        "MONTH": "MONTH",
-        "MO": "MONTH",
-        "M": "MONTH",
-        "DAY": "DAY",
-        "DY": "DAY",
-        "D": "DAY",
+    DAY_OR_YEAR_PARTS = {
+        "DY",
+    }
+
+    D_PREFIX_YEAR_PARTS = {
+        "DY",
+    }
+
+    D_PREFIX_MONTH_PARTS = {
+        "DM",
+    }
+
+    D_PREFIX_DAY_PARTS = {
+        "DD",
     }
 
     def build(
@@ -275,20 +277,24 @@ class ExcelSheetMappingService:
             or [],
         )
 
-        for date_key, parts in date_groups.items():
+        for date_key, group_info in date_groups.items():
+            parts = group_info.get(
+                "parts",
+                {},
+            )
+
             if not self.has_complete_date_group(
                 parts=parts,
             ):
                 continue
 
-            date_field_name = self.date_field_name_from_key(
-                date_key=date_key,
+            candidate_names = group_info.get(
+                "candidate_names",
+                [],
             )
 
-            date_column = self.find_matching_column(
-                field_name=NameNormalizer.normalize(
-                    date_field_name,
-                ),
+            date_column = self.find_first_matching_column(
+                candidate_names=candidate_names,
                 column_lookup=column_lookup,
             )
 
@@ -300,6 +306,11 @@ class ExcelSheetMappingService:
                 column=date_column,
             )
 
+            display_date_name = self.best_display_date_name(
+                candidate_names=candidate_names,
+                date_column=date_column,
+            )
+
             row = self.empty_row()
 
             row["Cobol Record IDMS"] = getattr(
@@ -309,16 +320,14 @@ class ExcelSheetMappingService:
             ) or ""
 
             row["Cobol Zone"] = self.inferred_outer_date_cobol_zone(
-                date_field_name=date_field_name,
+                date_field_name=display_date_name,
                 parts=parts,
             )
 
             row["IDMS Key"] = ""
-
             row["IDMS PIC Clause"] = ""
             row["Length of Field Bytes"] = ""
             row["Field end position"] = ""
-
             row["DB2 Key"] = db2_key
 
             row["New DB2 Record"] = (
@@ -353,7 +362,7 @@ class ExcelSheetMappingService:
         self,
         fields,
     ) -> dict[str, dict[str, object]]:
-        groups: dict[str, dict[str, object]] = {}
+        raw_candidates: list[dict[str, object]] = []
 
         for field in fields:
             field_name = getattr(
@@ -362,68 +371,190 @@ class ExcelSheetMappingService:
                 "",
             )
 
-            parsed = self.parse_date_part_field_name(
+            candidates = self.parse_date_part_candidates(
                 field_name=field_name,
             )
 
-            if parsed is None:
-                continue
+            for candidate in candidates:
+                candidate["field"] = field
+                raw_candidates.append(
+                    candidate,
+                )
 
-            date_key = parsed["date_key"]
-            part = parsed["part"]
+        groups: dict[str, dict[str, object]] = {}
+
+        for candidate in raw_candidates:
+            date_key = str(
+                candidate["date_key"],
+            )
+
+            part = str(
+                candidate["part"],
+            )
 
             if date_key not in groups:
-                groups[date_key] = {}
+                groups[date_key] = {
+                    "parts": {},
+                    "candidate_names": candidate.get(
+                        "candidate_names",
+                        [],
+                    ),
+                }
 
-            groups[date_key][part] = field
+            parts = groups[date_key]["parts"]
+
+            if isinstance(parts, dict):
+                parts[part] = candidate.get(
+                    "field",
+                )
+
+            existing_candidate_names = groups[date_key].get(
+                "candidate_names",
+                [],
+            )
+
+            if isinstance(existing_candidate_names, list):
+                for name in candidate.get(
+                    "candidate_names",
+                    [],
+                ):
+                    if name not in existing_candidate_names:
+                        existing_candidate_names.append(
+                            name,
+                        )
 
         return groups
 
-    def parse_date_part_field_name(
+    def parse_date_part_candidates(
         self,
         field_name: str,
-    ) -> dict[str, str] | None:
+    ) -> list[dict[str, object]]:
         tokens = self.split_name_tokens(
             field_name,
         )
 
         if len(tokens) < 2:
-            return None
+            return []
+
+        candidates: list[dict[str, object]] = []
 
         for index, token in enumerate(tokens):
             upper_token = token.upper()
 
-            if upper_token not in self.DATE_PART_TO_CANONICAL:
-                continue
-
-            canonical_part = self.DATE_PART_TO_CANONICAL[upper_token]
-
-            date_tokens = tokens.copy()
-            date_tokens[index] = "DATE"
-
-            date_key = " ".join(
-                date_tokens,
+            possible_parts = self.possible_date_parts(
+                token=upper_token,
+                tokens=tokens,
             )
 
-            return {
-                "date_key": date_key,
-                "part": canonical_part,
-            }
+            for part in possible_parts:
+                base_tokens = tokens[:index] + tokens[index + 1 :]
 
-        return None
+                if not base_tokens:
+                    continue
+
+                date_tokens = tokens.copy()
+                date_tokens[index] = "DATE"
+
+                base_name = " ".join(
+                    base_tokens,
+                )
+
+                date_name = " ".join(
+                    date_tokens,
+                )
+
+                candidate_names = self.unique_values(
+                    [
+                        date_name,
+                        base_name,
+                    ]
+                )
+
+                date_key = self.date_group_key(
+                    base_name=base_name,
+                )
+
+                candidates.append(
+                    {
+                        "date_key": date_key,
+                        "part": part,
+                        "candidate_names": candidate_names,
+                    }
+                )
+
+        return candidates
+
+    def possible_date_parts(
+        self,
+        token: str,
+        tokens: list[str],
+    ) -> list[str]:
+        upper_tokens = {
+            value.upper()
+            for value in tokens
+        }
+
+        has_d_prefix_pattern = bool(
+            upper_tokens
+            & (
+                self.D_PREFIX_YEAR_PARTS
+                | self.D_PREFIX_MONTH_PARTS
+                | self.D_PREFIX_DAY_PARTS
+            )
+        )
+
+        if token in self.YEAR_PARTS:
+            return [
+                "YEAR",
+            ]
+
+        if token in self.MONTH_PARTS:
+            return [
+                "MONTH",
+            ]
+
+        if token in self.DAY_PARTS:
+            return [
+                "DAY",
+            ]
+
+        if token in self.D_PREFIX_MONTH_PARTS:
+            return [
+                "MONTH",
+            ]
+
+        if token in self.D_PREFIX_DAY_PARTS:
+            return [
+                "DAY",
+            ]
+
+        if token in self.D_PREFIX_YEAR_PARTS:
+            if has_d_prefix_pattern:
+                return [
+                    "YEAR",
+                ]
+
+            return [
+                "DAY",
+                "YEAR",
+            ]
+
+        return []
 
     def inferred_date_key_for_date_part(
         self,
         field_name: str,
     ) -> str | None:
-        parsed = self.parse_date_part_field_name(
+        candidates = self.parse_date_part_candidates(
             field_name=field_name,
         )
 
-        if parsed is None:
+        if not candidates:
             return None
 
-        return parsed["date_key"]
+        return str(
+            candidates[0]["date_key"],
+        )
 
     def has_complete_date_group(
         self,
@@ -435,11 +566,54 @@ class ExcelSheetMappingService:
             and "DAY" in parts
         )
 
-    def date_field_name_from_key(
+    def date_group_key(
         self,
-        date_key: str,
+        base_name: str,
     ) -> str:
-        return date_key
+        return NameNormalizer.normalize(
+            base_name,
+        )
+
+    def find_first_matching_column(
+        self,
+        candidate_names: list[str],
+        column_lookup: dict[str, DB2Column],
+    ) -> DB2Column | None:
+        for candidate_name in candidate_names:
+            column = self.find_matching_column(
+                field_name=NameNormalizer.normalize(
+                    candidate_name,
+                ),
+                column_lookup=column_lookup,
+            )
+
+            if column is not None:
+                return column
+
+        return None
+
+    def best_display_date_name(
+        self,
+        candidate_names: list[str],
+        date_column: DB2Column,
+    ) -> str:
+        column_name = getattr(
+            date_column,
+            "name",
+            "",
+        )
+
+        for candidate_name in candidate_names:
+            if self.same_column_name(
+                left=candidate_name,
+                right=column_name,
+            ):
+                return candidate_name
+
+        if candidate_names:
+            return candidate_names[0]
+
+        return column_name
 
     def inferred_outer_date_cobol_zone(
         self,
@@ -477,6 +651,34 @@ class ExcelSheetMappingService:
             level=inferred_level,
             name=display_name,
         )
+
+    def unique_values(
+        self,
+        values: list[str],
+    ) -> list[str]:
+        result: list[str] = []
+        seen: set[str] = set()
+
+        for value in values:
+            normalized = NameNormalizer.normalize(
+                value,
+            )
+
+            if not normalized:
+                continue
+
+            if normalized in seen:
+                continue
+
+            seen.add(
+                normalized,
+            )
+
+            result.append(
+                normalized,
+            )
+
+        return result
 
     def to_cobol_name(
         self,
@@ -905,9 +1107,11 @@ class ExcelSheetMappingService:
         self,
         field_name: str,
     ) -> bool:
-        return self.parse_date_part_field_name(
-            field_name=field_name,
-        ) is not None
+        return bool(
+            self.parse_date_part_candidates(
+                field_name=field_name,
+            )
+        )
 
     def split_name_tokens(
         self,
@@ -979,7 +1183,6 @@ class ExcelSheetMappingService:
             getattr(field, "end_position", None)
             or getattr(field, "field_end_position", None)
             or getattr(field, "end", None)
-            or ""
         )
 
     def get_field_basetype(
