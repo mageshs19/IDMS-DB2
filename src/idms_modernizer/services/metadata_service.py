@@ -124,6 +124,8 @@ class MetadataService:
                     field.level,
                     "GROUP=",
                     field.is_group,
+                    "HAS_CHILD=",
+                    field.has_child,
                     "OCCURS=",
                     field.occurs,
                     field.occurs_min,

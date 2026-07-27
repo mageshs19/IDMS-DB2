@@ -18,16 +18,16 @@ class ExcelSheetMappingService:
     Builds the Excel Sheet Mapping table as rows.
 
     Final behavior:
-    - Uses record.mapping_fields when available so group fields are visible.
-    - Cobol Zone preserves original COBOL field with level number.
-    - CALC appears only when current field matches record.primary_key.
+    - Uses record.mapping_fields when available, so Excel shows all fields:
+      groups, leaves, outer dates, inner date parts, key groups, attributes,
+      and OCCURS groups.
+    - DDL/DB2 mapping is shown only for real DB2 physical columns.
+    - Outer date groups map to DB2 DATE columns.
+    - Inner date parts stay visible but DB2 mapping stays blank.
+    - CALC appears when the current COBOL field matches record.primary_key.
     - SET appears only when DB2 Key contains FK.
-    - No synthetic FK rows are added.
-    - No fallback SET is assigned to first row of a table.
-    - Inner date parts are shown as COBOL fields, but DB2 mapping is blank.
-    - Actual outer date group is mapped to DB2 DATE if present.
-    - If outer date group is missing, one inferred outer date row is added.
-    - Duplicate outer date rows are prevented.
+    - No synthetic FK rows.
+    - No fallback SET rows.
     """
 
     COLUMNS = [
@@ -109,6 +109,7 @@ class ExcelSheetMappingService:
             mapping_fields = (
                 getattr(record, "mapping_fields", None)
                 or record.fields
+                or []
             )
 
             date_group_info = self.collect_date_group_info(
@@ -238,7 +239,9 @@ class ExcelSheetMappingService:
                     db2_column=db2_column,
                 )
 
-                row["Hopex Expression TypeRemark"] = ""
+                row["Hopex Expression TypeRemark"] = self.hopex_remark(
+                    field=field,
+                )
 
                 row["Relation"] = relationship_lookup.get(
                     record_name,
@@ -747,6 +750,22 @@ class ExcelSheetMappingService:
         return "-".join(
             self.split_name_tokens(value),
         )
+
+    def hopex_remark(
+        self,
+        field,
+    ) -> str:
+        if getattr(field, "occurs", False):
+            occurs_min = getattr(field, "occurs_min", None)
+            occurs_max = getattr(field, "occurs_max", None)
+
+            if occurs_min is not None and occurs_max is not None:
+                if occurs_min == occurs_max:
+                    return f"OCCURS {occurs_max}"
+
+                return f"OCCURS {occurs_min} TO {occurs_max}"
+
+        return ""
 
     def empty_row(
         self,

@@ -20,10 +20,12 @@ class FieldExtractor:
     Extracts IDMS schema fields.
 
     extract():
-    - Leaf-only behavior for DDL / canonical / DB2 / COBOL conversion.
+    - Existing safe behavior.
+    - Returns only leaf fields for DDL / DB2 model / COBOL conversion.
 
     extract_all():
-    - All fields for Excel Sheet Mapping, including group/outer fields.
+    - Excel mapping behavior.
+    - Returns all fields including group/outer fields.
     """
 
     FIELD_NAME_PATTERN = re.compile(

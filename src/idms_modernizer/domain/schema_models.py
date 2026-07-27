@@ -37,11 +37,13 @@ class Record:
     name: str
 
     # Physical / DDL-safe fields.
+    # Used by canonical schema, DB2 model, DDL, Phase 2 metadata, and COBOL conversion.
     fields: list[DataField] = field(
         default_factory=list,
     )
 
-    # Excel-only complete field list, including groups.
+    # Excel-only complete field list.
+    # Includes group fields, leaf fields, outer date groups, key groups, attributes, OCCURS groups.
     mapping_fields: list[DataField] = field(
         default_factory=list,
     )
