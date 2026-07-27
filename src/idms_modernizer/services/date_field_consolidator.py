@@ -6,52 +6,40 @@ from idms_modernizer.services.name_normalizer import NameNormalizer
 
 class DateFieldConsolidator:
     """
-    Consolidates legacy YEAR / MONTH / DAY field triplets into a DATE field.
+    Consolidates legacy date child fields into one DATE field.
 
-    This implementation is generic.
-
-    It does not hard-code business field prefixes such as:
-    - START
-    - BIRTH
-    - CLAIM
-    - EXPERTISE
-    - STRUCTURE
-
-    Instead, it detects any matching triplet:
-
-        <BASE>_YEAR_<SUFFIX>
-        <BASE>_MONTH_<SUFFIX>
-        <BASE>_DAY_<SUFFIX>
-
-    and produces:
-
-        <BASE>_DATE_<SUFFIX>
-
-    Example:
-
-        START_YEAR_0415
-        START_MONTH_0415
-        START_DAY_0415
-
-    becomes:
-
-        START_DATE_0415
-
-    Example:
-
-        PATIENT_BIRTH_YEAR_0445
-        PATIENT_BIRTH_MONTH_0445
-        PATIENT_BIRTH_DAY_0445
-
-    becomes:
-
-        PATIENT_BIRTH_DATE_0445
+    Supports:
+    - YEAR / MONTH / DAY
+    - YR / MO / DY
+    - Y / M / D
+    - YY / MM / DD
+    - YYYY / MM / DD
+    - DY / DM / DD
     """
 
-    YEAR_PATTERN = re.compile(
-        r"^(?P<base>[A-Z0-9_]+)_YEAR_(?P<suffix>\d+)$",
-        re.IGNORECASE,
-    )
+    YEAR_PARTS = {
+        "YEAR",
+        "YR",
+        "Y",
+        "YY",
+        "YYYY",
+        "DY",
+    }
+
+    MONTH_PARTS = {
+        "MONTH",
+        "MON",
+        "MO",
+        "M",
+        "MM",
+        "DM",
+    }
+
+    DAY_PARTS = {
+        "DAY",
+        "D",
+        "DD",
+    }
 
     @staticmethod
     def consolidate(
@@ -61,146 +49,52 @@ class DateFieldConsolidator:
         consumed: set[str] = set()
         added_dates: set[str] = set()
 
-        field_lookup = {
-            NameNormalizer.normalize(field.name): field
-            for field in fields
-            if field and field.name
-        }
-
-        DateFieldConsolidator.add_existing_date_fields(
+        date_groups = DateFieldConsolidator.collect_date_groups(
             fields=fields,
-            result=result,
-            added_dates=added_dates,
         )
 
-        DateFieldConsolidator.add_consolidated_date_fields(
-            field_lookup=field_lookup,
-            result=result,
-            consumed=consumed,
-            added_dates=added_dates,
-        )
-
-        DateFieldConsolidator.add_remaining_fields(
-            fields=fields,
-            result=result,
-            consumed=consumed,
-            added_dates=added_dates,
-        )
-
-        return result
-
-    @staticmethod
-    def add_existing_date_fields(
-        fields: list[DataField],
-        result: list[DataField],
-        added_dates: set[str],
-    ) -> None:
-        for field in fields:
-            if not field or not field.name:
-                continue
-
-            normalized_name = NameNormalizer.normalize(
-                field.name,
-            )
-
-            datatype = (
-                field.datatype
-                or ""
-            ).upper()
-
-            if datatype == "DATE":
-                if normalized_name not in added_dates:
-                    result.append(
-                        field,
-                    )
-
-                    added_dates.add(
-                        normalized_name,
-                    )
-
-    @staticmethod
-    def add_consolidated_date_fields(
-        field_lookup: dict[str, DataField],
-        result: list[DataField],
-        consumed: set[str],
-        added_dates: set[str],
-    ) -> None:
-        for normalized_name in list(field_lookup.keys()):
-            match = DateFieldConsolidator.YEAR_PATTERN.match(
-                normalized_name,
-            )
-
-            if not match:
-                continue
-
-            base = match.group(
-                "base",
-            )
-
-            suffix = match.group(
-                "suffix",
-            )
-
-            year_name = f"{base}_YEAR_{suffix}"
-            month_name = f"{base}_MONTH_{suffix}"
-            day_name = f"{base}_DAY_{suffix}"
-            date_name = f"{base}_DATE_{suffix}"
-
-            if not DateFieldConsolidator.has_complete_date_triplet(
-                field_lookup=field_lookup,
-                year_name=year_name,
-                month_name=month_name,
-                day_name=day_name,
+        for date_name, parts in date_groups.items():
+            if not DateFieldConsolidator.has_complete_date_group(
+                parts=parts,
             ):
                 continue
 
-            if date_name not in added_dates:
-                result.append(
-                    DataField(
-                        name=date_name,
-                        datatype="DATE",
-                        length=None,
-                        scale=None,
-                        picture=None,
+            if date_name in added_dates:
+                continue
+
+            template = (
+                parts.get("YEAR")
+                or parts.get("MONTH")
+                or parts.get("DAY")
+            )
+
+            result.append(
+                DataField(
+                    name=date_name,
+                    level=DateFieldConsolidator.parent_level(
+                        template,
+                    ),
+                    datatype="DATE",
+                    length=None,
+                    scale=None,
+                    picture=None,
+                    basetype="DATE",
+                    has_child=True,
+                    is_group=True,
+                )
+            )
+
+            added_dates.add(
+                date_name,
+            )
+
+            for part_field in parts.values():
+                consumed.add(
+                    NameNormalizer.normalize(
+                        part_field.name,
                     )
                 )
 
-                added_dates.add(
-                    date_name,
-                )
-
-            consumed.add(
-                year_name,
-            )
-
-            consumed.add(
-                month_name,
-            )
-
-            consumed.add(
-                day_name,
-            )
-
-    @staticmethod
-    def has_complete_date_triplet(
-        field_lookup: dict[str, DataField],
-        year_name: str,
-        month_name: str,
-        day_name: str,
-    ) -> bool:
-        return (
-            year_name in field_lookup
-            and month_name in field_lookup
-            and day_name in field_lookup
-        )
-
-    @staticmethod
-    def add_remaining_fields(
-        fields: list[DataField],
-        result: list[DataField],
-        consumed: set[str],
-        added_dates: set[str],
-    ) -> None:
         for field in fields:
             if not field or not field.name:
                 continue
@@ -218,3 +112,138 @@ class DateFieldConsolidator:
             result.append(
                 field,
             )
+
+        return result
+
+    @staticmethod
+    def collect_date_groups(
+        fields: list[DataField],
+    ) -> dict[str, dict[str, DataField]]:
+        groups: dict[str, dict[str, DataField]] = {}
+
+        for field in fields:
+            parsed = DateFieldConsolidator.parse_date_part(
+                field_name=field.name,
+            )
+
+            if parsed is None:
+                continue
+
+            date_name = parsed["date_name"]
+            part = parsed["part"]
+
+            if date_name not in groups:
+                groups[date_name] = {}
+
+            groups[date_name][part] = field
+
+        return groups
+
+    @staticmethod
+    def parse_date_part(
+        field_name: str,
+    ) -> dict[str, str] | None:
+        tokens = DateFieldConsolidator.split_tokens(
+            field_name,
+        )
+
+        if len(tokens) < 2:
+            return None
+
+        for index, token in enumerate(tokens):
+            part = DateFieldConsolidator.date_part_type(
+                token=token,
+                tokens=tokens,
+            )
+
+            if part is None:
+                continue
+
+            date_tokens = tokens.copy()
+            date_tokens[index] = "DATE"
+
+            return {
+                "date_name": " ".join(date_tokens),
+                "part": part,
+            }
+
+        return None
+
+    @staticmethod
+    def date_part_type(
+        token: str,
+        tokens: list[str],
+    ) -> str | None:
+        token = token.upper()
+
+        has_dy_dm_dd = (
+            "DY" in tokens
+            and "DM" in tokens
+            and "DD" in tokens
+        )
+
+        if token in DateFieldConsolidator.YEAR_PARTS:
+            if token == "DY" and not has_dy_dm_dd:
+                return "DAY"
+
+            return "YEAR"
+
+        if token in DateFieldConsolidator.MONTH_PARTS:
+            return "MONTH"
+
+        if token in DateFieldConsolidator.DAY_PARTS:
+            return "DAY"
+
+        return None
+
+    @staticmethod
+    def has_complete_date_group(
+        parts: dict[str, DataField],
+    ) -> bool:
+        return (
+            "YEAR" in parts
+            and "MONTH" in parts
+            and "DAY" in parts
+        )
+
+    @staticmethod
+    def parent_level(
+        field: DataField | None,
+    ) -> int | None:
+        if field is None:
+            return None
+
+        level = getattr(
+            field,
+            "level",
+            None,
+        )
+
+        if level is None:
+            return None
+
+        try:
+            return max(
+                int(level) - 1,
+                1,
+            )
+
+        except Exception:
+            return level
+
+    @staticmethod
+    def split_tokens(
+        value: str,
+    ) -> list[str]:
+        normalized = NameNormalizer.normalize(
+            value,
+        )
+
+        return [
+            token.upper()
+            for token in re.split(
+                r"[\s_-]+",
+                normalized,
+            )
+            if token
+        ]

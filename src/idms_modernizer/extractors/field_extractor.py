@@ -17,33 +17,28 @@ class FieldCandidate:
 
 class FieldExtractor:
     """
-    Discovers IDMS schema fields from record-section lines.
+    Extracts IDMS schema fields.
 
-    Behavior:
-    - Identifies COBOL level numbers.
-    - Preserves the level number in DataField.level.
-    - Skips FILLER.
-    - Skips level 88 condition names.
-    - Skips group / outer fields that have subordinate children.
-    - Returns only leaf / inner fields.
+    extract():
+    - Existing safe behavior.
+    - Returns only leaf fields for DDL / DB2 model / COBOL conversion.
 
-    Example:
-        02 EMP-NAME-0415
-        03 EMP-FIRST-NAME-0415 DISPLAY X(10) 1 10
-        03 EMP-LAST-NAME-0415 DISPLAY X(15) 11 15
-
-    Result:
-        03 EMP-FIRST-NAME-0415
-        03 EMP-LAST-NAME-0415
-
-    Skipped:
-        02 EMP-NAME-0415
+    extract_all():
+    - Mapping-only behavior.
+    - Returns all fields including group/outer fields for Excel Sheet Mapping.
     """
 
     FIELD_NAME_PATTERN = re.compile(
         r"^\s*(?P<level>0[1-9]|[1-4][0-9]|88)\s+"
         r"(?P<name>[A-Z][A-Z0-9-]*|FILLER)\b"
         r"(?P<rest>.*)$",
+        re.IGNORECASE,
+    )
+
+    OCCURS_PATTERN = re.compile(
+        r"\bOCCURS\s+"
+        r"(?P<min>[0-9]+)"
+        r"(?:\s+TO\s+(?P<max>[0-9]+))?",
         re.IGNORECASE,
     )
 
@@ -61,21 +56,60 @@ class FieldExtractor:
             candidates=candidates,
         )
 
+        return self.candidates_to_fields(
+            candidates=leaf_candidates,
+        )
+
+    def extract_all(
+        self,
+        lines: List[str],
+    ) -> List[DataField]:
+        print("USING FIELD EXTRACTOR VERSION ALL-FIELDS-FOR-MAPPING")
+
+        candidates = self.discover_candidates(
+            lines=lines,
+        )
+
+        self.mark_group_fields(
+            candidates=candidates,
+        )
+
+        return self.candidates_to_fields(
+            candidates=candidates,
+        )
+
+    def candidates_to_fields(
+        self,
+        candidates: List[FieldCandidate],
+    ) -> List[DataField]:
         fields: List[DataField] = []
         seen: Set[str] = set()
 
-        for candidate in leaf_candidates:
+        for candidate in candidates:
             name = candidate.name.upper()
 
             if name in seen:
                 continue
 
-            seen.add(name)
+            seen.add(
+                name,
+            )
+
+            occurs_min, occurs_max = self.extract_occurs(
+                text=candidate.rest,
+            )
 
             fields.append(
                 DataField(
                     name=name,
                     level=candidate.level,
+                    has_child=candidate.has_child,
+                    is_group=candidate.has_child,
+                    occurs=occurs_max is not None,
+                    occurs_min=occurs_min,
+                    occurs_max=occurs_max,
+                    raw_line=candidate.original_line,
+                    rest=candidate.rest,
                 )
             )
 
@@ -126,34 +160,27 @@ class FieldExtractor:
 
         return candidates
 
+    def mark_group_fields(
+        self,
+        candidates: List[FieldCandidate],
+    ) -> None:
+        for index, candidate in enumerate(candidates):
+            candidate.has_child = False
+
+            for next_candidate in candidates[index + 1 :]:
+                if next_candidate.level <= candidate.level:
+                    break
+
+                candidate.has_child = True
+                break
+
     def mark_and_filter_leaf_fields(
         self,
         candidates: List[FieldCandidate],
     ) -> List[FieldCandidate]:
-        """
-        Marks parent/group fields and returns only leaf fields.
-
-        COBOL group rule:
-        A field is a group field if a following field has a greater level
-        before the structure returns to the same or lower level.
-
-        Example:
-            02 OFFICE-ZIP-0450
-            04 OFFICE-ZIP-FIRST-FIVE-0450
-            04 OFFICE-ZIP-LAST-FOUR-0450
-
-        OFFICE-ZIP-0450 is a group field and is skipped.
-        The two level-04 fields are retained.
-        """
-
-        for index, candidate in enumerate(candidates):
-            for next_candidate in candidates[index + 1:]:
-                if next_candidate.level <= candidate.level:
-                    break
-
-                if next_candidate.level > candidate.level:
-                    candidate.has_child = True
-                    break
+        self.mark_group_fields(
+            candidates=candidates,
+        )
 
         return [
             candidate
@@ -161,35 +188,41 @@ class FieldExtractor:
             if not candidate.has_child
         ]
 
+    def extract_occurs(
+        self,
+        text: str,
+    ) -> tuple[int | None, int | None]:
+        if not text:
+            return None, None
+
+        match = self.OCCURS_PATTERN.search(
+            text,
+        )
+
+        if not match:
+            return None, None
+
+        occurs_min = int(
+            match.group("min"),
+        )
+
+        occurs_max = (
+            int(match.group("max"))
+            if match.group("max")
+            else occurs_min
+        )
+
+        return occurs_min, occurs_max
+
     def clean_line(
         self,
-        line: str | None,
+        line: str,
     ) -> str:
-        if line is None:
+        if not line:
             return ""
 
         cleaned = str(line).strip()
+        cleaned = cleaned.replace("\u00a0", " ")
+        cleaned = re.sub(r"\s+", " ", cleaned)
 
-        cleaned = cleaned.replace(
-            "\t",
-            " ",
-        )
-
-        cleaned = cleaned.replace(
-            "\u00a0",
-            " ",
-        )
-
-        cleaned = re.sub(
-            r"<[^>]+>",
-            " ",
-            cleaned,
-        )
-
-        cleaned = re.sub(
-            r"\s+",
-            " ",
-            cleaned,
-        ).strip()
-
-        return cleaned
+        return cleaned.strip()

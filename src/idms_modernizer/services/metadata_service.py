@@ -1,38 +1,33 @@
 from idms_modernizer.parsers.text_extractor import (
     TextExtractor,
 )
-
 from idms_modernizer.services.document_segmenter import (
     DocumentSegmenter,
 )
-
 from idms_modernizer.extractors.owner_member_extractor import (
     OwnerMemberExtractor,
 )
-
 from idms_modernizer.extractors.field_extractor import (
     FieldExtractor,
 )
-
 from idms_modernizer.extractors.cobol_zone_extractor import (
     CobolZoneExtractor,
 )
-
 from idms_modernizer.services.schema_picture_enricher import (
     SchemaPictureEnricher,
 )
-
 from idms_modernizer.services.relationship_resolver import (
     RelationshipResolver,
 )
-
 from idms_modernizer.domain.schema_models import (
     SchemaMetadata,
     Record,
 )
-
 from idms_modernizer.extractors.primary_key_extractor import (
     PrimaryKeyExtractor,
+)
+from idms_modernizer.services.name_normalizer import (
+    NameNormalizer,
 )
 
 
@@ -72,13 +67,27 @@ class MetadataService:
                 section.lines,
             )
 
-            discovered_fields = self.field_extractor.extract(
+            physical_discovered_fields = self.field_extractor.extract(
+                section.lines,
+            )
+
+            mapping_discovered_fields = self.field_extractor.extract_all(
                 section.lines,
             )
 
             record.fields = self.picture_enricher.enrich(
-                fields=discovered_fields,
+                fields=physical_discovered_fields,
                 lines=section.lines,
+            )
+
+            enriched_mapping_fields = self.picture_enricher.enrich(
+                fields=mapping_discovered_fields,
+                lines=section.lines,
+            )
+
+            record.mapping_fields = self.merge_structural_metadata(
+                enriched_fields=enriched_mapping_fields,
+                source_fields=mapping_discovered_fields,
             )
 
             record.set_memberships = self.membership_extractor.extract(
@@ -94,6 +103,7 @@ class MetadataService:
             print(f"FIELDS EXTRACTED FOR {record.name}")
             print("=" * 80)
 
+            print("PHYSICAL FIELDS:")
             for field in record.fields:
                 print(
                     field.name,
@@ -104,6 +114,21 @@ class MetadataService:
                     field.start_position,
                     field.end_position,
                     field.basetype,
+                )
+
+            print("MAPPING FIELDS:")
+            for field in record.mapping_fields:
+                print(
+                    field.name,
+                    field.level,
+                    "GROUP=",
+                    field.is_group,
+                    "HAS_CHILD=",
+                    field.has_child,
+                    "OCCURS=",
+                    field.occurs,
+                    field.occurs_min,
+                    field.occurs_max,
                 )
 
             print(
@@ -125,3 +150,48 @@ class MetadataService:
         )
 
         return metadata
+
+    def merge_structural_metadata(
+        self,
+        enriched_fields,
+        source_fields,
+    ):
+        source_lookup = {
+            NameNormalizer.normalize(field.name): field
+            for field in source_fields
+            if field and field.name
+        }
+
+        merged_fields = []
+
+        for enriched_field in enriched_fields:
+            key = NameNormalizer.normalize(
+                enriched_field.name,
+            )
+
+            source_field = source_lookup.get(
+                key,
+            )
+
+            if source_field is None:
+                merged_fields.append(
+                    enriched_field,
+                )
+                continue
+
+            merged_fields.append(
+                enriched_field.model_copy(
+                    update={
+                        "level": getattr(source_field, "level", None),
+                        "has_child": getattr(source_field, "has_child", False),
+                        "is_group": getattr(source_field, "is_group", False),
+                        "occurs": getattr(source_field, "occurs", False),
+                        "occurs_min": getattr(source_field, "occurs_min", None),
+                        "occurs_max": getattr(source_field, "occurs_max", None),
+                        "raw_line": getattr(source_field, "raw_line", None),
+                        "rest": getattr(source_field, "rest", None),
+                    }
+                )
+            )
+
+        return merged_fields

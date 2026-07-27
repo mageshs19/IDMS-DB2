@@ -10,7 +10,6 @@ from idms_modernizer.domain.relationship_models import (
 
 class DataField(BaseModel):
     name: str
-
     level: int | None = None
 
     datatype: str | None = None
@@ -22,12 +21,29 @@ class DataField(BaseModel):
     end_position: int | None = None
     basetype: str | None = None
 
+    has_child: bool = False
+    is_group: bool = False
+
+    occurs: bool = False
+    occurs_min: int | None = None
+    occurs_max: int | None = None
+
+    raw_line: str | None = None
+    rest: str | None = None
+
 
 @dataclass
 class Record:
     name: str
 
+    # Physical fields used by DDL, DB2 model, Phase 2 metadata, and COBOL conversion.
     fields: list[DataField] = field(
+        default_factory=list,
+    )
+
+    # Mapping-only fields used by Excel Sheet Mapping.
+    # This includes group/outer fields and leaf fields.
+    mapping_fields: list[DataField] = field(
         default_factory=list,
     )
 
