@@ -17,29 +17,15 @@ class ExcelSheetMappingService:
     """
     Builds the Excel Sheet Mapping table as rows.
 
-    Behavior:
-    - Cobol Zone shows the original COBOL field with level number.
-      Example: 03 SELECTION-YEAR-0400
-
-    - YEAR / MONTH / DAY date child fields are mapped to consolidated DB2
-      DATE columns.
-      Example: SELECTION-YEAR-0400 maps to SELECTION_DATE_0400.
-
-    - IDMS Key shows only corresponding IDMS key labels:
-      CALC appears only on the field matching record.primary_key.
-      SET appears only on the field mapped to a DB2 FK column.
-
-    - DB2 Key shows PK, FK, or PK/FK based on DB2Table.primary_key,
-      DB2Column.primary_key, and DB2Table.foreign_keys.
-
-    Generic behavior only:
-    - No hardcoded record names.
-    - No hardcoded business field names.
-    - No application-specific suffix map.
-
-    Important:
-    - This version does NOT add synthetic FK rows.
-    - FK / SET is applied only to existing mapping rows.
+    Final behavior:
+    - Cobol Zone preserves original COBOL field with level number.
+    - CALC appears only when current field matches record.primary_key.
+    - SET appears only when current mapped DB2 column is an actual FK column.
+    - No synthetic FK rows are added.
+    - No fallback SET is assigned to first row of a table.
+    - YEAR / MONTH / DAY child fields are shown as COBOL fields, but DB2
+      mapping columns are kept blank.
+    - Only actual outer DATE field, if present in metadata, maps to DB2 DATE.
     """
 
     COLUMNS = [
@@ -69,15 +55,6 @@ class ExcelSheetMappingService:
         "YR",
         "MO",
         "DY",
-    }
-
-    DATE_PART_TO_DATE = {
-        "YEAR": "DATE",
-        "MONTH": "DATE",
-        "DAY": "DATE",
-        "YR": "DATE",
-        "MO": "DATE",
-        "DY": "DATE",
     }
 
     def build(
@@ -117,9 +94,21 @@ class ExcelSheetMappingService:
                     field.name,
                 )
 
-                db2_column = self.find_matching_column(
+                is_date_part = self.is_date_part_name(
                     field_name=field_name,
-                    column_lookup=column_lookup,
+                )
+
+                db2_column = None
+
+                if not is_date_part:
+                    db2_column = self.find_matching_column(
+                        field_name=field_name,
+                        column_lookup=column_lookup,
+                    )
+
+                db2_key = self.db2_key_label(
+                    table=table,
+                    column=db2_column,
                 )
 
                 row = self.empty_row()
@@ -135,8 +124,7 @@ class ExcelSheetMappingService:
                 row["IDMS Key"] = self.idms_key_label(
                     record=record,
                     field=field,
-                    table=table,
-                    db2_column=db2_column,
+                    db2_key=db2_key,
                 )
 
                 row["IDMS PIC Clause"] = self.get_field_picture(
@@ -155,14 +143,13 @@ class ExcelSheetMappingService:
                     )
                 )
 
-                row["DB2 Key"] = self.db2_key_label(
-                    table=table,
-                    column=db2_column,
-                )
+                row["DB2 Key"] = db2_key
 
                 row["New DB2 Record"] = (
                     table.name
-                    if table is not None and getattr(table, "name", None)
+                    if db2_column is not None
+                    and table is not None
+                    and getattr(table, "name", None)
                     else ""
                 )
 
@@ -371,21 +358,6 @@ class ExcelSheetMappingService:
         if suffix_removed in column_lookup:
             return column_lookup[suffix_removed]
 
-        date_column_name = self.date_part_to_date_column_name(
-            field_name,
-        )
-
-        if date_column_name:
-            if date_column_name in column_lookup:
-                return column_lookup[date_column_name]
-
-            date_suffix_removed = self.remove_record_suffix(
-                date_column_name,
-            )
-
-            if date_suffix_removed in column_lookup:
-                return column_lookup[date_suffix_removed]
-
         return None
 
     def build_cobol_zone_value(
@@ -425,8 +397,7 @@ class ExcelSheetMappingService:
         self,
         record,
         field,
-        table: DB2Table | None,
-        db2_column: DB2Column | None,
+        db2_key: str,
     ) -> str:
         labels: list[str] = []
 
@@ -438,9 +409,8 @@ class ExcelSheetMappingService:
                 "CALC",
             )
 
-        if self.is_set_key_field(
-            table=table,
-            db2_column=db2_column,
+        if self.db2_key_contains_fk(
+            db2_key=db2_key,
         ):
             labels.append(
                 "SET",
@@ -449,6 +419,18 @@ class ExcelSheetMappingService:
         return "; ".join(
             labels,
         )
+
+    def db2_key_contains_fk(
+        self,
+        db2_key: str,
+    ) -> bool:
+        parts = [
+            part.strip().upper()
+            for part in str(db2_key or "").split("/")
+            if part.strip()
+        ]
+
+        return "FK" in parts
 
     def is_calc_key_field(
         self,
@@ -473,19 +455,6 @@ class ExcelSheetMappingService:
         return self.same_column_name(
             left=primary_key,
             right=field_name,
-        )
-
-    def is_set_key_field(
-        self,
-        table: DB2Table | None,
-        db2_column: DB2Column | None,
-    ) -> bool:
-        if table is None or db2_column is None:
-            return False
-
-        return self.is_foreign_key_column(
-            table=table,
-            column=db2_column,
         )
 
     def db2_key_label(
@@ -549,13 +518,6 @@ class ExcelSheetMappingService:
         table: DB2Table,
         column: DB2Column,
     ) -> bool:
-        """
-        Detects whether the current mapped DB2 column is an FK column.
-
-        This intentionally marks FK only on existing mapped rows.
-        It does not create extra rows.
-        """
-
         column_name = getattr(
             column,
             "name",
@@ -570,7 +532,7 @@ class ExcelSheetMappingService:
                 foreign_key=foreign_key,
             )
 
-            if self.column_names_match_for_fk(
+            if self.same_column_name(
                 left=foreign_key_column_name,
                 right=column_name,
             ):
@@ -591,83 +553,29 @@ class ExcelSheetMappingService:
             or ""
         )
 
-    def column_names_match_for_fk(
-        self,
-        left: str | None,
-        right: str | None,
-    ) -> bool:
-        """
-        Generic FK column matching.
-
-        Matches:
-        - exact normalized name
-        - suffix-removed name
-        - compact token name
-
-        Does not use hardcoded business names.
-        """
-
-        if not left or not right:
-            return False
-
-        left_normalized = NameNormalizer.normalize(
-            left,
-        )
-
-        right_normalized = NameNormalizer.normalize(
-            right,
-        )
-
-        if left_normalized == right_normalized:
-            return True
-
-        left_without_suffix = self.remove_record_suffix(
-            left_normalized,
-        )
-
-        right_without_suffix = self.remove_record_suffix(
-            right_normalized,
-        )
-
-        if left_without_suffix == right_without_suffix:
-            return True
-
-        left_compact = self.compact_name(
-            left_without_suffix,
-        )
-
-        right_compact = self.compact_name(
-            right_without_suffix,
-        )
-
-        if left_compact and left_compact == right_compact:
-            return True
-
-        return False
-
     def same_column_name(
         self,
         left: str | None,
         right: str | None,
     ) -> bool:
-        return self.column_names_match_for_fk(
-            left=left,
-            right=right,
+        if not left or not right:
+            return False
+
+        normalized_left = NameNormalizer.normalize(
+            left,
         )
 
-    def compact_name(
-        self,
-        value: str | None,
-    ) -> str:
-        if not value:
-            return ""
+        normalized_right = NameNormalizer.normalize(
+            right,
+        )
 
-        return re.sub(
-            r"[^A-Z0-9]",
-            "",
-            NameNormalizer.normalize(
-                value,
-            ),
+        if normalized_left == normalized_right:
+            return True
+
+        return self.remove_record_suffix(
+            normalized_left,
+        ) == self.remove_record_suffix(
+            normalized_right,
         )
 
     def format_cobol_level_and_name(
@@ -688,82 +596,6 @@ class ExcelSheetMappingService:
         except Exception:
             return f"{level} {name}".strip()
 
-    def date_part_to_date_column_name(
-        self,
-        field_name: str,
-    ) -> str | None:
-        normalized = NameNormalizer.normalize(
-            field_name,
-        )
-
-        tokens = self.split_name_tokens(
-            normalized,
-        )
-
-        if len(tokens) < 2:
-            return None
-
-        changed = False
-        output_tokens: list[str] = []
-
-        for token in tokens:
-            upper_token = token.upper()
-
-            if upper_token in self.DATE_PART_TO_DATE:
-                output_tokens.append(
-                    self.DATE_PART_TO_DATE[upper_token],
-                )
-
-                changed = True
-
-            else:
-                output_tokens.append(
-                    upper_token,
-                )
-
-        if not changed:
-            return None
-
-        return " ".join(
-            output_tokens,
-        )
-
-    def date_part_to_cobol_date_name(
-        self,
-        field_name: str,
-    ) -> str:
-        tokens = self.split_name_tokens(
-            field_name,
-        )
-
-        if len(tokens) < 2:
-            return field_name
-
-        output_tokens: list[str] = []
-        changed = False
-
-        for token in tokens:
-            upper_token = token.upper()
-
-            if upper_token in self.DATE_PART_TO_DATE:
-                output_tokens.append(
-                    "DATE",
-                )
-
-                changed = True
-
-            else:
-                output_tokens.append(
-                    upper_token,
-                )
-
-        if not changed:
-            return field_name
-
-        return "-".join(
-            output_tokens,
-        )
-
     def is_date_part_name(
         self,
         field_name: str,
@@ -774,19 +606,6 @@ class ExcelSheetMappingService:
 
         return any(
             token.upper() in self.DATE_PART_NAMES
-            for token in tokens
-        )
-
-    def is_date_column_name(
-        self,
-        column_name: str,
-    ) -> bool:
-        tokens = self.split_name_tokens(
-            column_name,
-        )
-
-        return any(
-            token.upper() == "DATE"
             for token in tokens
         )
 
