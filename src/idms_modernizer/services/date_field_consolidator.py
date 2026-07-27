@@ -59,7 +59,11 @@ class DateFieldConsolidator:
             ):
                 continue
 
-            if date_name in added_dates:
+            normalized_date_name = NameNormalizer.normalize(
+                date_name,
+            )
+
+            if normalized_date_name in added_dates:
                 continue
 
             template = (
@@ -72,12 +76,18 @@ class DateFieldConsolidator:
                 DataField(
                     name=date_name,
                     level=DateFieldConsolidator.parent_level(
-                        template,
+                        field=template,
                     ),
                     datatype="DATE",
                     length=None,
                     scale=None,
                     picture=None,
+                    start_position=DateFieldConsolidator.min_start_position(
+                        parts=parts,
+                    ),
+                    end_position=DateFieldConsolidator.max_end_position(
+                        parts=parts,
+                    ),
                     basetype="DATE",
                     has_child=True,
                     is_group=True,
@@ -85,7 +95,7 @@ class DateFieldConsolidator:
             )
 
             added_dates.add(
-                date_name,
+                normalized_date_name,
             )
 
             for part_field in parts.values():
@@ -144,7 +154,7 @@ class DateFieldConsolidator:
         field_name: str,
     ) -> dict[str, str] | None:
         tokens = DateFieldConsolidator.split_tokens(
-            field_name,
+            value=field_name,
         )
 
         if len(tokens) < 2:
@@ -230,6 +240,52 @@ class DateFieldConsolidator:
 
         except Exception:
             return level
+
+    @staticmethod
+    def min_start_position(
+        parts: dict[str, DataField],
+    ) -> int | None:
+        values: list[int] = []
+
+        for field in parts.values():
+            value = getattr(
+                field,
+                "start_position",
+                None,
+            )
+
+            if value is not None:
+                values.append(
+                    int(value),
+                )
+
+        if not values:
+            return None
+
+        return min(values)
+
+    @staticmethod
+    def max_end_position(
+        parts: dict[str, DataField],
+    ) -> int | None:
+        values: list[int] = []
+
+        for field in parts.values():
+            value = getattr(
+                field,
+                "end_position",
+                None,
+            )
+
+            if value is not None:
+                values.append(
+                    int(value),
+                )
+
+        if not values:
+            return None
+
+        return max(values)
 
     @staticmethod
     def split_tokens(

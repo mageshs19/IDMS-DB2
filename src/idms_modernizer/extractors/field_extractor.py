@@ -20,12 +20,10 @@ class FieldExtractor:
     Extracts IDMS schema fields.
 
     extract():
-    - Existing safe behavior.
-    - Returns only leaf fields for DDL / DB2 model / COBOL conversion.
+    - Leaf-only behavior for DDL / canonical / DB2 / COBOL conversion.
 
     extract_all():
-    - Mapping-only behavior.
-    - Returns all fields including group/outer fields for Excel Sheet Mapping.
+    - All fields for Excel Sheet Mapping, including group/outer fields.
     """
 
     FIELD_NAME_PATTERN = re.compile(
@@ -77,43 +75,6 @@ class FieldExtractor:
         return self.candidates_to_fields(
             candidates=candidates,
         )
-
-    def candidates_to_fields(
-        self,
-        candidates: List[FieldCandidate],
-    ) -> List[DataField]:
-        fields: List[DataField] = []
-        seen: Set[str] = set()
-
-        for candidate in candidates:
-            name = candidate.name.upper()
-
-            if name in seen:
-                continue
-
-            seen.add(
-                name,
-            )
-
-            occurs_min, occurs_max = self.extract_occurs(
-                text=candidate.rest,
-            )
-
-            fields.append(
-                DataField(
-                    name=name,
-                    level=candidate.level,
-                    has_child=candidate.has_child,
-                    is_group=candidate.has_child,
-                    occurs=occurs_max is not None,
-                    occurs_min=occurs_min,
-                    occurs_max=occurs_max,
-                    raw_line=candidate.original_line,
-                    rest=candidate.rest,
-                )
-            )
-
-        return fields
 
     def discover_candidates(
         self,
@@ -187,6 +148,43 @@ class FieldExtractor:
             for candidate in candidates
             if not candidate.has_child
         ]
+
+    def candidates_to_fields(
+        self,
+        candidates: List[FieldCandidate],
+    ) -> List[DataField]:
+        fields: List[DataField] = []
+        seen: Set[str] = set()
+
+        for candidate in candidates:
+            name = candidate.name.upper()
+
+            if name in seen:
+                continue
+
+            seen.add(
+                name,
+            )
+
+            occurs_min, occurs_max = self.extract_occurs(
+                text=candidate.rest,
+            )
+
+            fields.append(
+                DataField(
+                    name=name,
+                    level=candidate.level,
+                    has_child=candidate.has_child,
+                    is_group=candidate.has_child,
+                    occurs=occurs_max is not None,
+                    occurs_min=occurs_min,
+                    occurs_max=occurs_max,
+                    raw_line=candidate.original_line,
+                    rest=candidate.rest,
+                )
+            )
+
+        return fields
 
     def extract_occurs(
         self,

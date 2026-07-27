@@ -36,13 +36,12 @@ class DataField(BaseModel):
 class Record:
     name: str
 
-    # Physical fields used by DDL, DB2 model, Phase 2 metadata, and COBOL conversion.
+    # Physical / DDL-safe fields.
     fields: list[DataField] = field(
         default_factory=list,
     )
 
-    # Mapping-only fields used by Excel Sheet Mapping.
-    # This includes group/outer fields and leaf fields.
+    # Excel-only complete field list, including groups.
     mapping_fields: list[DataField] = field(
         default_factory=list,
     )
