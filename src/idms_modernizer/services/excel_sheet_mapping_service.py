@@ -18,7 +18,6 @@ class ExcelSheetMappingService:
     Builds the Excel Sheet Mapping table as rows.
 
     Behavior:
-
     - Cobol Zone shows the original COBOL field with level number.
       Example: 03 SELECTION-YEAR-0400
 
@@ -32,6 +31,11 @@ class ExcelSheetMappingService:
 
     - DB2 Key shows PK, FK, or PK/FK based on DB2Table.primary_key,
       DB2Column.primary_key, and DB2Table.foreign_keys.
+
+    Generic behavior only:
+    - No hardcoded record names.
+    - No hardcoded business field names.
+    - No application-specific suffix map.
     """
 
     COLUMNS = [
@@ -43,11 +47,11 @@ class ExcelSheetMappingService:
         "Field end position",
         "DB2 Key",
         "New DB2 Record",
-        "New DB2_Field_name",
+        "New DB2 Field_name",
         "New DB2 Data Type",
         "Hopex Expression TypeRemark",
         "Relation",
-        "Reference Field Name (CopyBook)",
+        "Reference Field Name (CopyBook) ",
         "Reference Field PIC Clause",
         "Cross Application DB2 Field Name",
         "Cross Appln DB2 Data Type",
@@ -158,7 +162,7 @@ class ExcelSheetMappingService:
                     else ""
                 )
 
-                row["New DB2_Field_name"] = (
+                row["New DB2 Field_name"] = (
                     db2_column.name
                     if db2_column is not None and getattr(db2_column, "name", None)
                     else ""
@@ -175,7 +179,7 @@ class ExcelSheetMappingService:
                     "",
                 )
 
-                row["Reference Field Name (CopyBook)"] = ""
+                row["Reference Field Name (CopyBook) "] = ""
                 row["Reference Field PIC Clause"] = ""
                 row["Cross Application DB2 Field Name"] = ""
                 row["Cross Appln DB2 Data Type"] = ""
@@ -204,18 +208,23 @@ class ExcelSheetMappingService:
     ) -> dict[str, DB2Table]:
         lookup: dict[str, DB2Table] = {}
 
-        for table in db2_model.tables:
+        if db2_model is None:
+            return lookup
+
+        for table in getattr(db2_model, "tables", []) or []:
             normalized_table_name = NameNormalizer.normalize(
                 table.name,
             )
 
-            lookup[normalized_table_name] = table
+            if normalized_table_name:
+                lookup[normalized_table_name] = table
 
             suffix_removed_table_name = self.remove_record_suffix(
                 normalized_table_name,
             )
 
-            lookup[suffix_removed_table_name] = table
+            if suffix_removed_table_name:
+                lookup[suffix_removed_table_name] = table
 
         return lookup
 
@@ -225,18 +234,20 @@ class ExcelSheetMappingService:
     ) -> dict[str, DB2Column]:
         lookup: dict[str, DB2Column] = {}
 
-        for column in table.columns:
+        for column in getattr(table, "columns", []) or []:
             normalized_column_name = NameNormalizer.normalize(
                 column.name,
             )
 
-            lookup[normalized_column_name] = column
+            if normalized_column_name:
+                lookup[normalized_column_name] = column
 
             suffix_removed_name = self.remove_record_suffix(
                 normalized_column_name,
             )
 
-            lookup[suffix_removed_name] = column
+            if suffix_removed_name:
+                lookup[suffix_removed_name] = column
 
         return lookup
 
@@ -246,35 +257,40 @@ class ExcelSheetMappingService:
     ) -> dict[str, str]:
         lookup: dict[str, str] = {}
 
-        for record in metadata.records:
+        for record in getattr(metadata, "records", []) or []:
             record_name = NameNormalizer.normalize(
-                record.name,
+                getattr(record, "name", None),
             )
 
-            relation_values: list[str] = []
+            if not record_name:
+                continue
+
+            relation_parts: list[str] = []
 
             for membership in getattr(record, "set_memberships", []) or []:
-                relation_value = self.format_relationship(
+                relation_text = self.build_membership_relation_text(
                     membership=membership,
                 )
 
-                if relation_value:
-                    relation_values.append(
-                        relation_value,
+                if relation_text:
+                    relation_parts.append(
+                        relation_text,
                     )
 
-            lookup[record_name] = "; ".join(
-                relation_values,
-            )
+            if relation_parts:
+                lookup[record_name] = "; ".join(
+                    relation_parts,
+                )
 
         return lookup
 
-    def format_relationship(
+    def build_membership_relation_text(
         self,
         membership,
     ) -> str:
         relation_type = (
             getattr(membership, "relation_type", None)
+            or getattr(membership, "role", None)
             or getattr(membership, "type", None)
             or ""
         )
@@ -307,26 +323,34 @@ class ExcelSheetMappingService:
 
         if relation_type == "OWNER":
             if member_record:
-                return f"OWNER:{set_name}->{member_record}"
+                return f"OWNER: {set_name} -> {member_record}"
 
-            return f"OWNER:{set_name}"
+            return f"OWNER: {set_name}"
 
         if relation_type == "MEMBER":
             if owner_record:
-                return f"MEMBER:{set_name}<-{owner_record}"
+                return f"MEMBER: {set_name} <- {owner_record}"
 
-            return f"MEMBER:{set_name}"
+            return f"MEMBER: {set_name}"
 
         if owner_record and member_record:
-            return f"{relation_type}:{set_name}:{owner_record}->{member_record}"
+            return f"{relation_type}: {set_name}: {owner_record} -> {member_record}".strip(
+                ": "
+            )
 
         if owner_record:
-            return f"{relation_type}:{set_name}<-{owner_record}"
+            return f"{relation_type}: {set_name} <- {owner_record}".strip(
+                ": "
+            )
 
         if member_record:
-            return f"{relation_type}:{set_name}->{member_record}"
+            return f"{relation_type}: {set_name} -> {member_record}".strip(
+                ": "
+            )
 
-        return f"{relation_type}:{set_name}".strip(":")
+        return f"{relation_type}: {set_name}".strip(
+            ": "
+        )
 
     def find_matching_column(
         self,
@@ -377,10 +401,19 @@ class ExcelSheetMappingService:
 
         DATE consolidation is only used for matching the DB2 column.
         """
-        field_name = field.name or ""
+
+        field_name = getattr(
+            field,
+            "name",
+            "",
+        ) or ""
 
         if not field_name:
-            return record.cobol_zone or ""
+            return getattr(
+                record,
+                "cobol_zone",
+                "",
+            ) or ""
 
         field_level = getattr(
             field,
@@ -394,7 +427,7 @@ class ExcelSheetMappingService:
                 name=field_name,
             )
 
-        return field_name or record.cobol_zone or ""
+        return field_name
 
     def idms_key_label(
         self,
@@ -413,6 +446,7 @@ class ExcelSheetMappingService:
         - Only when the current mapped DB2 column is an FK column.
         - This prevents SET from appearing on every field in a record.
         """
+
         labels: list[str] = []
 
         if self.is_calc_key_field(
@@ -478,29 +512,10 @@ class ExcelSheetMappingService:
         table: DB2Table | None,
         column: DB2Column | None,
     ) -> str:
-        """
-        Returns PK, FK, or PK/FK for the DB2 Key column.
-
-        PK is detected from:
-        - column.primary_key
-        - table.primary_key matching column.name
-
-        FK is detected from:
-        - table.foreign_keys where foreign_key.column_name matches column.name
-        """
         if table is None or column is None:
             return ""
 
         labels: list[str] = []
-
-        column_name = getattr(
-            column,
-            "name",
-            "",
-        )
-
-        if not column_name:
-            return ""
 
         if self.is_primary_key_column(
             table=table,
@@ -527,7 +542,11 @@ class ExcelSheetMappingService:
         table: DB2Table,
         column: DB2Column,
     ) -> bool:
-        if getattr(column, "primary_key", False):
+        if getattr(
+            column,
+            "primary_key",
+            False,
+        ):
             return True
 
         table_primary_key = getattr(
@@ -553,7 +572,7 @@ class ExcelSheetMappingService:
             foreign_key_column_name = getattr(
                 foreign_key,
                 "column_name",
-                "",
+                None,
             )
 
             if self.same_column_name(
@@ -643,7 +662,7 @@ class ExcelSheetMappingService:
         if not changed:
             return None
 
-        return "_".join(
+        return " ".join(
             output_tokens,
         )
 
@@ -658,6 +677,7 @@ class ExcelSheetMappingService:
         for the Cobol Zone column because Cobol Zone must preserve the
         original COBOL field.
         """
+
         tokens = self.split_name_tokens(
             field_name,
         )
@@ -750,13 +770,11 @@ class ExcelSheetMappingService:
             and tokens[-1].isdigit()
             and len(tokens[-1]) == 4
         ):
-            return "_".join(
+            return " ".join(
                 tokens[:-1],
             )
 
-        return "_".join(
-            tokens,
-        )
+        return normalized
 
     def get_field_picture(
         self,
