@@ -36,6 +36,10 @@ class ExcelSheetMappingService:
     - No hardcoded record names.
     - No hardcoded business field names.
     - No application-specific suffix map.
+
+    Important:
+    - This version does NOT add synthetic FK rows.
+    - FK / SET is applied only to existing mapping rows.
     """
 
     COLUMNS = [
@@ -390,18 +394,6 @@ class ExcelSheetMappingService:
         field,
         db2_column: DB2Column | None,
     ) -> str:
-        """
-        Builds the Cobol Zone value for the Excel sheet.
-
-        Important:
-        This preserves the original COBOL field name.
-
-        Example:
-        03 SELECTION-YEAR-0400 stays as 03 SELECTION-YEAR-0400.
-
-        DATE consolidation is only used for matching the DB2 column.
-        """
-
         field_name = getattr(
             field,
             "name",
@@ -436,17 +428,6 @@ class ExcelSheetMappingService:
         table: DB2Table | None,
         db2_column: DB2Column | None,
     ) -> str:
-        """
-        Returns CALC, SET, or CALC; SET for the IDMS Key column.
-
-        CALC:
-        - Only when the current COBOL field matches record.primary_key.
-
-        SET:
-        - Only when the current mapped DB2 column is an FK column.
-        - This prevents SET from appearing on every field in a record.
-        """
-
         labels: list[str] = []
 
         if self.is_calc_key_field(
@@ -568,18 +549,99 @@ class ExcelSheetMappingService:
         table: DB2Table,
         column: DB2Column,
     ) -> bool:
+        """
+        Detects whether the current mapped DB2 column is an FK column.
+
+        This intentionally marks FK only on existing mapped rows.
+        It does not create extra rows.
+        """
+
+        column_name = getattr(
+            column,
+            "name",
+            None,
+        )
+
+        if not column_name:
+            return False
+
         for foreign_key in getattr(table, "foreign_keys", []) or []:
-            foreign_key_column_name = getattr(
-                foreign_key,
-                "column_name",
-                None,
+            foreign_key_column_name = self.get_foreign_key_column_name(
+                foreign_key=foreign_key,
             )
 
-            if self.same_column_name(
+            if self.column_names_match_for_fk(
                 left=foreign_key_column_name,
-                right=column.name,
+                right=column_name,
             ):
                 return True
+
+        return False
+
+    def get_foreign_key_column_name(
+        self,
+        foreign_key,
+    ) -> str:
+        return (
+            getattr(foreign_key, "column_name", None)
+            or getattr(foreign_key, "child_column", None)
+            or getattr(foreign_key, "child_fk", None)
+            or getattr(foreign_key, "foreign_key", None)
+            or getattr(foreign_key, "column", None)
+            or ""
+        )
+
+    def column_names_match_for_fk(
+        self,
+        left: str | None,
+        right: str | None,
+    ) -> bool:
+        """
+        Generic FK column matching.
+
+        Matches:
+        - exact normalized name
+        - suffix-removed name
+        - compact token name
+
+        Does not use hardcoded business names.
+        """
+
+        if not left or not right:
+            return False
+
+        left_normalized = NameNormalizer.normalize(
+            left,
+        )
+
+        right_normalized = NameNormalizer.normalize(
+            right,
+        )
+
+        if left_normalized == right_normalized:
+            return True
+
+        left_without_suffix = self.remove_record_suffix(
+            left_normalized,
+        )
+
+        right_without_suffix = self.remove_record_suffix(
+            right_normalized,
+        )
+
+        if left_without_suffix == right_without_suffix:
+            return True
+
+        left_compact = self.compact_name(
+            left_without_suffix,
+        )
+
+        right_compact = self.compact_name(
+            right_without_suffix,
+        )
+
+        if left_compact and left_compact == right_compact:
+            return True
 
         return False
 
@@ -588,24 +650,24 @@ class ExcelSheetMappingService:
         left: str | None,
         right: str | None,
     ) -> bool:
-        if not left or not right:
-            return False
-
-        normalized_left = NameNormalizer.normalize(
-            left,
+        return self.column_names_match_for_fk(
+            left=left,
+            right=right,
         )
 
-        normalized_right = NameNormalizer.normalize(
-            right,
-        )
+    def compact_name(
+        self,
+        value: str | None,
+    ) -> str:
+        if not value:
+            return ""
 
-        if normalized_left == normalized_right:
-            return True
-
-        return self.remove_record_suffix(
-            normalized_left,
-        ) == self.remove_record_suffix(
-            normalized_right,
+        return re.sub(
+            r"[^A-Z0-9]",
+            "",
+            NameNormalizer.normalize(
+                value,
+            ),
         )
 
     def format_cobol_level_and_name(
@@ -670,14 +732,6 @@ class ExcelSheetMappingService:
         self,
         field_name: str,
     ) -> str:
-        """
-        Kept only for compatibility with any existing callers.
-
-        This method converts YEAR / MONTH / DAY to DATE, but it is not used
-        for the Cobol Zone column because Cobol Zone must preserve the
-        original COBOL field.
-        """
-
         tokens = self.split_name_tokens(
             field_name,
         )
