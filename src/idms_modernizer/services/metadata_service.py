@@ -99,6 +99,15 @@ class MetadataService:
                 section.lines,
             )
 
+            primary_key_control_item = self.primary_key_extractor.extract_control_item(
+                section.lines,
+            )
+
+            self.apply_primary_key_control_item(
+                record=record,
+                control_item=primary_key_control_item,
+            )
+
             print("=" * 80)
             print(f"FIELDS EXTRACTED FOR {record.name}")
             print("=" * 80)
@@ -130,6 +139,12 @@ class MetadataService:
                     field.occurs,
                     field.occurs_min,
                     field.occurs_max,
+                    "LEN=",
+                    field.length,
+                    "START=",
+                    field.start_position,
+                    "END=",
+                    field.end_position,
                 )
 
             print(
@@ -196,3 +211,53 @@ class MetadataService:
             )
 
         return merged_fields
+
+    def apply_primary_key_control_item(
+        self,
+        record: Record,
+        control_item: dict[str, int] | None,
+    ) -> None:
+        """
+        Applies SET CONTROL ITEM FOR CALC start/length to the primary key field.
+
+        This is required for group CALC keys such as KY-FFRECAB, where the group
+        has no PIC but the schema defines key start/length using the control item.
+        """
+
+        if not record.primary_key:
+            return
+
+        if not control_item:
+            return
+
+        normalized_primary_key = NameNormalizer.normalize(
+            record.primary_key,
+        )
+
+        updated_mapping_fields = []
+
+        for field in record.mapping_fields:
+            field_name = NameNormalizer.normalize(
+                field.name,
+            )
+
+            if field_name != normalized_primary_key:
+                updated_mapping_fields.append(
+                    field,
+                )
+                continue
+
+            updated_mapping_fields.append(
+                field.model_copy(
+                    update={
+                        "datatype": field.datatype or "VARCHAR",
+                        "length": control_item.get("length"),
+                        "scale": None,
+                        "start_position": control_item.get("start_position"),
+                        "end_position": control_item.get("end_position"),
+                        "basetype": field.basetype or "TEXT",
+                    }
+                )
+            )
+
+        record.mapping_fields = updated_mapping_fields
