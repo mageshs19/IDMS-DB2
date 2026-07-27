@@ -20,7 +20,7 @@ class ExcelSheetMappingService:
     Final behavior:
     - Cobol Zone preserves original COBOL field with level number.
     - CALC appears only when current field matches record.primary_key.
-    - SET appears only when current mapped DB2 column is an actual FK column.
+    - SET appears only when DB2 Key contains FK.
     - No synthetic FK rows are added.
     - No fallback SET is assigned to first row of a table.
     - YEAR / MONTH / DAY child fields are shown as COBOL fields, but DB2
@@ -55,6 +55,9 @@ class ExcelSheetMappingService:
         "YR",
         "MO",
         "DY",
+        "Y",
+        "M",
+        "D",
     }
 
     def build(
