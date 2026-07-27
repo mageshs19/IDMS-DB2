@@ -19,13 +19,15 @@ class ExcelSheetMappingService:
 
     Final behavior:
     - Cobol Zone preserves original COBOL field with level number.
-    - CALC appears only when current field matches record.primary_key.
+    - CALC appears only when current field matches record.primary_key and
+      mapped DB2 column is physically PK.
     - SET appears only when DB2 Key contains FK.
     - No synthetic FK rows are added.
     - No fallback SET is assigned to first row of a table.
-    - YEAR / MONTH / DAY child fields are shown as COBOL fields, but DB2
-      mapping columns are kept blank.
-    - Only actual outer DATE field, if present in metadata, maps to DB2 DATE.
+    - YEAR / MONTH / DAY / Y / M / D child fields are shown as COBOL fields,
+      but DB2 mapping columns are kept blank.
+    - Inferred outer DATE rows are added for complete date child groups and
+      mapped to DB2 DATE columns.
     """
 
     COLUMNS = [
@@ -60,6 +62,36 @@ class ExcelSheetMappingService:
         "D",
     }
 
+    YEAR_ALIASES = {
+        "YEAR",
+        "YR",
+        "Y",
+    }
+
+    MONTH_ALIASES = {
+        "MONTH",
+        "MO",
+        "M",
+    }
+
+    DAY_ALIASES = {
+        "DAY",
+        "DY",
+        "D",
+    }
+
+    DATE_PART_TO_CANONICAL = {
+        "YEAR": "YEAR",
+        "YR": "YEAR",
+        "Y": "YEAR",
+        "MONTH": "MONTH",
+        "MO": "MONTH",
+        "M": "MONTH",
+        "DAY": "DAY",
+        "DY": "DAY",
+        "D": "DAY",
+    }
+
     def build(
         self,
         metadata: SchemaMetadata,
@@ -92,10 +124,38 @@ class ExcelSheetMappingService:
                 else {}
             )
 
+            inferred_date_rows = self.build_inferred_outer_date_rows(
+                record=record,
+                table=table,
+                column_lookup=column_lookup,
+                relationship_text=relationship_lookup.get(
+                    record_name,
+                    "",
+                ),
+            )
+
+            emitted_inferred_dates: set[str] = set()
+
             for field in record.fields:
                 field_name = NameNormalizer.normalize(
                     field.name,
                 )
+
+                inferred_date_key = self.inferred_date_key_for_date_part(
+                    field_name=field_name,
+                )
+
+                if (
+                    inferred_date_key
+                    and inferred_date_key in inferred_date_rows
+                    and inferred_date_key not in emitted_inferred_dates
+                ):
+                    rows.append(
+                        inferred_date_rows[inferred_date_key],
+                    )
+                    emitted_inferred_dates.add(
+                        inferred_date_key,
+                    )
 
                 is_date_part = self.is_date_part_name(
                     field_name=field_name,
@@ -186,7 +246,249 @@ class ExcelSheetMappingService:
                     row,
                 )
 
+            for inferred_date_key, inferred_date_row in inferred_date_rows.items():
+                if inferred_date_key not in emitted_inferred_dates:
+                    rows.append(
+                        inferred_date_row,
+                    )
+                    emitted_inferred_dates.add(
+                        inferred_date_key,
+                    )
+
         return rows
+
+    def build_inferred_outer_date_rows(
+        self,
+        record,
+        table: DB2Table | None,
+        column_lookup: dict[str, DB2Column],
+        relationship_text: str,
+    ) -> dict[str, dict[str, str]]:
+        inferred_rows: dict[str, dict[str, str]] = {}
+
+        date_groups = self.collect_date_part_groups(
+            fields=getattr(
+                record,
+                "fields",
+                [],
+            )
+            or [],
+        )
+
+        for date_key, parts in date_groups.items():
+            if not self.has_complete_date_group(
+                parts=parts,
+            ):
+                continue
+
+            date_field_name = self.date_field_name_from_key(
+                date_key=date_key,
+            )
+
+            date_column = self.find_matching_column(
+                field_name=NameNormalizer.normalize(
+                    date_field_name,
+                ),
+                column_lookup=column_lookup,
+            )
+
+            if date_column is None:
+                continue
+
+            db2_key = self.db2_key_label(
+                table=table,
+                column=date_column,
+            )
+
+            row = self.empty_row()
+
+            row["Cobol Record IDMS"] = getattr(
+                record,
+                "name",
+                "",
+            ) or ""
+
+            row["Cobol Zone"] = self.inferred_outer_date_cobol_zone(
+                date_field_name=date_field_name,
+                parts=parts,
+            )
+
+            row["IDMS Key"] = ""
+
+            row["IDMS PIC Clause"] = ""
+            row["Length of Field Bytes"] = ""
+            row["Field end position"] = ""
+
+            row["DB2 Key"] = db2_key
+
+            row["New DB2 Record"] = (
+                table.name
+                if table is not None and getattr(table, "name", None)
+                else ""
+            )
+
+            row["New DB2 Field_name"] = (
+                date_column.name
+                if getattr(date_column, "name", None)
+                else ""
+            )
+
+            row["New DB2 Data Type"] = self.get_db2_datatype(
+                db2_column=date_column,
+            )
+
+            row["Hopex Expression TypeRemark"] = ""
+            row["Relation"] = relationship_text
+            row["Reference Field Name (CopyBook) "] = ""
+            row["Reference Field PIC Clause"] = ""
+            row["Cross Application DB2 Field Name"] = ""
+            row["Cross Appln DB2 Data Type"] = ""
+            row["Basetype"] = "DATE"
+
+            inferred_rows[date_key] = row
+
+        return inferred_rows
+
+    def collect_date_part_groups(
+        self,
+        fields,
+    ) -> dict[str, dict[str, object]]:
+        groups: dict[str, dict[str, object]] = {}
+
+        for field in fields:
+            field_name = getattr(
+                field,
+                "name",
+                "",
+            )
+
+            parsed = self.parse_date_part_field_name(
+                field_name=field_name,
+            )
+
+            if parsed is None:
+                continue
+
+            date_key = parsed["date_key"]
+            part = parsed["part"]
+
+            if date_key not in groups:
+                groups[date_key] = {}
+
+            groups[date_key][part] = field
+
+        return groups
+
+    def parse_date_part_field_name(
+        self,
+        field_name: str,
+    ) -> dict[str, str] | None:
+        tokens = self.split_name_tokens(
+            field_name,
+        )
+
+        if len(tokens) < 2:
+            return None
+
+        for index, token in enumerate(tokens):
+            upper_token = token.upper()
+
+            if upper_token not in self.DATE_PART_TO_CANONICAL:
+                continue
+
+            canonical_part = self.DATE_PART_TO_CANONICAL[upper_token]
+
+            date_tokens = tokens.copy()
+            date_tokens[index] = "DATE"
+
+            date_key = " ".join(
+                date_tokens,
+            )
+
+            return {
+                "date_key": date_key,
+                "part": canonical_part,
+            }
+
+        return None
+
+    def inferred_date_key_for_date_part(
+        self,
+        field_name: str,
+    ) -> str | None:
+        parsed = self.parse_date_part_field_name(
+            field_name=field_name,
+        )
+
+        if parsed is None:
+            return None
+
+        return parsed["date_key"]
+
+    def has_complete_date_group(
+        self,
+        parts: dict[str, object],
+    ) -> bool:
+        return (
+            "YEAR" in parts
+            and "MONTH" in parts
+            and "DAY" in parts
+        )
+
+    def date_field_name_from_key(
+        self,
+        date_key: str,
+    ) -> str:
+        return date_key
+
+    def inferred_outer_date_cobol_zone(
+        self,
+        date_field_name: str,
+        parts: dict[str, object],
+    ) -> str:
+        first_part_field = (
+            parts.get("YEAR")
+            or parts.get("MONTH")
+            or parts.get("DAY")
+        )
+
+        level = getattr(
+            first_part_field,
+            "level",
+            None,
+        )
+
+        inferred_level = None
+
+        if level is not None:
+            try:
+                inferred_level = max(
+                    int(level) - 1,
+                    1,
+                )
+            except Exception:
+                inferred_level = level
+
+        display_name = self.to_cobol_name(
+            value=date_field_name,
+        )
+
+        return self.format_cobol_level_and_name(
+            level=inferred_level,
+            name=display_name,
+        )
+
+    def to_cobol_name(
+        self,
+        value: str,
+    ) -> str:
+        tokens = self.split_name_tokens(
+            value,
+        )
+
+        return "-".join(
+            tokens,
+        )
 
     def empty_row(
         self,
@@ -603,14 +905,9 @@ class ExcelSheetMappingService:
         self,
         field_name: str,
     ) -> bool:
-        tokens = self.split_name_tokens(
-            field_name,
-        )
-
-        return any(
-            token.upper() in self.DATE_PART_NAMES
-            for token in tokens
-        )
+        return self.parse_date_part_field_name(
+            field_name=field_name,
+        ) is not None
 
     def split_name_tokens(
         self,
