@@ -25,7 +25,9 @@ class ExcelSheetMappingService:
     - No synthetic FK rows are added.
     - No fallback SET is assigned to first row of a table.
     - Inner date parts are shown as COBOL fields, but DB2 mapping is blank.
-    - Outer date groups are shown and mapped to DB2 DATE.
+    - Actual outer date group is mapped to DB2 DATE if present.
+    - If outer date group is missing, one inferred outer date row is added.
+    - Duplicate outer date rows are prevented.
     """
 
     COLUMNS = [
@@ -113,12 +115,28 @@ class ExcelSheetMappingService:
                 fields=mapping_fields,
             )
 
-            emitted_inferred_dates: set[str] = set()
+            emitted_date_rows: set[str] = set()
 
             for field in mapping_fields:
                 field_name = NameNormalizer.normalize(
-                    field.name,
+                    getattr(field, "name", ""),
                 )
+
+                is_actual_outer_date = self.is_actual_outer_date_field(
+                    field=field,
+                    date_group_info=date_group_info,
+                )
+
+                if is_actual_outer_date:
+                    outer_date_key = self.outer_date_key_for_field(
+                        field=field,
+                        date_group_info=date_group_info,
+                    )
+
+                    if outer_date_key:
+                        emitted_date_rows.add(
+                            outer_date_key,
+                        )
 
                 inferred_date_key = self.inferred_date_key_for_date_part(
                     field_name=field_name,
@@ -127,13 +145,17 @@ class ExcelSheetMappingService:
                 if (
                     inferred_date_key
                     and inferred_date_key in date_group_info
-                    and inferred_date_key not in emitted_inferred_dates
+                    and inferred_date_key not in emitted_date_rows
+                    and date_group_info[inferred_date_key].get("actual_outer_field") is None
                 ):
                     inferred_row = self.build_inferred_date_row(
                         record=record,
                         table=table,
                         column_lookup=column_lookup,
-                        relationship_text=relationship_lookup.get(record_name, ""),
+                        relationship_text=relationship_lookup.get(
+                            record_name,
+                            "",
+                        ),
                         group_info=date_group_info[inferred_date_key],
                     )
 
@@ -141,7 +163,8 @@ class ExcelSheetMappingService:
                         rows.append(
                             inferred_row,
                         )
-                        emitted_inferred_dates.add(
+
+                        emitted_date_rows.add(
                             inferred_date_key,
                         )
 
@@ -236,7 +259,7 @@ class ExcelSheetMappingService:
                 )
 
             for date_key, group_info in date_group_info.items():
-                if date_key in emitted_inferred_dates:
+                if date_key in emitted_date_rows:
                     continue
 
                 if group_info.get("actual_outer_field") is not None:
@@ -246,7 +269,10 @@ class ExcelSheetMappingService:
                     record=record,
                     table=table,
                     column_lookup=column_lookup,
-                    relationship_text=relationship_lookup.get(record_name, ""),
+                    relationship_text=relationship_lookup.get(
+                        record_name,
+                        "",
+                    ),
                     group_info=group_info,
                 )
 
@@ -254,7 +280,8 @@ class ExcelSheetMappingService:
                     rows.append(
                         inferred_row,
                     )
-                    emitted_inferred_dates.add(
+
+                    emitted_date_rows.add(
                         date_key,
                     )
 
@@ -298,21 +325,97 @@ class ExcelSheetMappingService:
             if not field_name:
                 continue
 
+            if self.is_date_part_name(
+                field_name=field_name,
+            ):
+                continue
+
             for key, info in groups.items():
-                candidate_names = info.get("candidate_names", [])
+                candidate_names = info.get(
+                    "candidate_names",
+                    [],
+                )
 
                 if any(
-                    self.same_column_name(field_name, candidate_name)
+                    self.same_column_name(
+                        field_name,
+                        candidate_name,
+                    )
                     for candidate_name in candidate_names
                 ):
-                    if not self.is_date_part_name(field_name):
-                        info["actual_outer_field"] = field
+                    info["actual_outer_field"] = field
 
         return {
             key: value
             for key, value in groups.items()
-            if self.has_complete_date_group(value.get("parts", {}))
+            if self.has_complete_date_group(
+                value.get("parts", {}),
+            )
         }
+
+    def is_actual_outer_date_field(
+        self,
+        field,
+        date_group_info: dict[str, dict],
+    ) -> bool:
+        field_name = NameNormalizer.normalize(
+            getattr(field, "name", ""),
+        )
+
+        if not field_name:
+            return False
+
+        for group_info in date_group_info.values():
+            actual_outer_field = group_info.get(
+                "actual_outer_field",
+            )
+
+            if actual_outer_field is None:
+                continue
+
+            actual_outer_name = NameNormalizer.normalize(
+                getattr(actual_outer_field, "name", ""),
+            )
+
+            if self.same_column_name(
+                field_name,
+                actual_outer_name,
+            ):
+                return True
+
+        return False
+
+    def outer_date_key_for_field(
+        self,
+        field,
+        date_group_info: dict[str, dict],
+    ) -> str | None:
+        field_name = NameNormalizer.normalize(
+            getattr(field, "name", ""),
+        )
+
+        if not field_name:
+            return None
+
+        for date_key, group_info in date_group_info.items():
+            actual_outer_field = group_info.get(
+                "actual_outer_field",
+            )
+
+            if actual_outer_field is None:
+                continue
+
+            actual_outer_name = NameNormalizer.normalize(
+                getattr(actual_outer_field, "name", ""),
+            )
+
+            if self.same_column_name(
+                field_name,
+                actual_outer_name,
+            ):
+                return date_key
+
+        return None
 
     def build_inferred_date_row(
         self,
@@ -335,29 +438,17 @@ class ExcelSheetMappingService:
         if date_column is None:
             return None
 
-        actual_outer_field = group_info.get(
-            "actual_outer_field",
+        display_name = self.best_display_date_name(
+            candidate_names=candidate_names,
+            date_column=date_column,
         )
 
-        if actual_outer_field is not None:
-            display_name = getattr(
-                actual_outer_field,
-                "name",
-                "",
-            )
-            level = getattr(
-                actual_outer_field,
-                "level",
-                None,
-            )
-        else:
-            display_name = self.best_display_date_name(
-                candidate_names=candidate_names,
-                date_column=date_column,
-            )
-            level = self.inferred_parent_level(
-                parts=group_info.get("parts", {}),
-            )
+        level = self.inferred_parent_level(
+            parts=group_info.get(
+                "parts",
+                {},
+            ),
+        )
 
         db2_key = self.db2_key_label(
             table=table,
@@ -472,8 +563,13 @@ class ExcelSheetMappingService:
             date_tokens = tokens.copy()
             date_tokens[index] = "DATE"
 
-            base_name = " ".join(base_tokens)
-            date_name = " ".join(date_tokens)
+            base_name = " ".join(
+                base_tokens,
+            )
+
+            date_name = " ".join(
+                date_tokens,
+            )
 
             candidates.append(
                 {
