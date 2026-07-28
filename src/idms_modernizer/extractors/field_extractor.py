@@ -1,7 +1,7 @@
 import re
 
 from dataclasses import dataclass
-from typing import List, Set
+from typing import List
 
 from idms_modernizer.domain.schema_models import DataField
 
@@ -13,19 +13,31 @@ class FieldCandidate:
     rest: str
     original_line: str
     has_child: bool = False
+    is_group: bool = False
+    occurs: bool = False
+    occurs_min: int | None = None
+    occurs_max: int | None = None
 
 
 class FieldExtractor:
     """
     Extracts IDMS schema fields.
 
+    Generic behavior only:
+    - No business field names are hardcoded.
+    - No record names are hardcoded.
+    - Physical extraction and Sheet Mapping extraction are separated.
+
     extract():
-    - Existing safe behavior.
-    - Returns only leaf fields for DDL / DB2 model / COBOL conversion.
+    - Used for physical / DDL-safe fields.
+    - Returns only leaf fields.
+    - Excludes FILLER by default because FILLER should not become a DB2 column.
 
     extract_all():
-    - Excel mapping behavior.
-    - Returns all fields including group/outer fields.
+    - Used for Excel Sheet Mapping.
+    - Returns all fields:
+      groups, subgroups, leaves, date groups, date parts, OCCURS groups, and FILLER.
+    - Includes FILLER by default so Sheet Mapping can show FILLER rows.
     """
 
     FIELD_NAME_PATTERN = re.compile(
@@ -42,14 +54,30 @@ class FieldExtractor:
         re.IGNORECASE,
     )
 
+    def __init__(
+        self,
+        include_filler: bool = False,
+        auto_number_filler: bool = False,
+    ) -> None:
+        self.include_filler = include_filler
+        self.auto_number_filler = auto_number_filler
+
     def extract(
         self,
         lines: List[str],
     ) -> List[DataField]:
+        """
+        Physical / DDL-safe extraction.
+
+        FILLER is excluded here because physical DB2 columns should not be created
+        from COBOL FILLER.
+        """
+
         print("USING FIELD EXTRACTOR VERSION LEAF-ONLY-WITH-LEVEL")
 
         candidates = self.discover_candidates(
             lines=lines,
+            include_filler=False,
         )
 
         leaf_candidates = self.mark_and_filter_leaf_fields(
@@ -63,11 +91,19 @@ class FieldExtractor:
     def extract_all(
         self,
         lines: List[str],
+        include_filler: bool = True,
     ) -> List[DataField]:
+        """
+        Excel Sheet Mapping extraction.
+
+        FILLER is included here so Sheet Mapping can show FILLER rows.
+        """
+
         print("USING FIELD EXTRACTOR VERSION ALL-FIELDS-FOR-MAPPING")
 
         candidates = self.discover_candidates(
             lines=lines,
+            include_filler=include_filler,
         )
 
         self.mark_group_fields(
@@ -81,8 +117,14 @@ class FieldExtractor:
     def discover_candidates(
         self,
         lines: List[str],
+        include_filler: bool | None = None,
     ) -> List[FieldCandidate]:
         candidates: List[FieldCandidate] = []
+
+        if include_filler is None:
+            include_filler = self.include_filler
+
+        filler_index = 0
 
         for line in lines:
             cleaned_line = self.clean_line(
@@ -106,20 +148,37 @@ class FieldExtractor:
             name = match.group("name").upper()
             rest = match.group("rest").strip()
 
-            if name == "FILLER":
-                continue
-
             if level == 88:
                 continue
 
-            candidates.append(
-                FieldCandidate(
-                    level=level,
-                    name=name,
-                    rest=rest,
-                    original_line=cleaned_line,
-                )
+            if name == "FILLER":
+                if not include_filler:
+                    continue
+
+                filler_index += 1
+
+                candidate_name = name
+
+                if self.auto_number_filler:
+                    candidate_name = f"FILLER_{filler_index}"
+            else:
+                candidate_name = name
+
+            occurs_info = self.parse_occurs(
+                text=rest,
             )
+
+            candidate = FieldCandidate(
+                level=level,
+                name=candidate_name,
+                rest=rest,
+                original_line=cleaned_line,
+                occurs=occurs_info["occurs"],
+                occurs_min=occurs_info["occurs_min"],
+                occurs_max=occurs_info["occurs_max"],
+            )
+
+            candidates.append(candidate)
 
         return candidates
 
@@ -129,13 +188,16 @@ class FieldExtractor:
     ) -> None:
         for index, candidate in enumerate(candidates):
             candidate.has_child = False
+            candidate.is_group = False
 
-            for next_candidate in candidates[index + 1 :]:
-                if next_candidate.level <= candidate.level:
+            for later_candidate in candidates[index + 1:]:
+                if later_candidate.level <= candidate.level:
                     break
 
-                candidate.has_child = True
-                break
+                if later_candidate.level > candidate.level:
+                    candidate.has_child = True
+                    candidate.is_group = True
+                    break
 
     def mark_and_filter_leaf_fields(
         self,
@@ -145,84 +207,101 @@ class FieldExtractor:
             candidates=candidates,
         )
 
-        return [
-            candidate
-            for candidate in candidates
-            if not candidate.has_child
-        ]
+        leaf_candidates: List[FieldCandidate] = []
+
+        for candidate in candidates:
+            if candidate.has_child:
+                continue
+
+            leaf_candidates.append(candidate)
+
+        return leaf_candidates
 
     def candidates_to_fields(
         self,
         candidates: List[FieldCandidate],
     ) -> List[DataField]:
         fields: List[DataField] = []
-        seen: Set[str] = set()
 
         for candidate in candidates:
-            name = candidate.name.upper()
+            display_name = candidate.name
 
-            if name in seen:
-                continue
+            if display_name.startswith("FILLER_"):
+                display_name = "FILLER"
 
-            seen.add(
-                name,
+            field = DataField(
+                name=display_name,
+                level=candidate.level,
+                rest=candidate.rest,
+                raw_line=candidate.original_line,
+                has_child=candidate.has_child,
+                is_group=candidate.is_group,
+                occurs=candidate.occurs,
+                occurs_min=candidate.occurs_min,
+                occurs_max=candidate.occurs_max,
             )
 
-            occurs_min, occurs_max = self.extract_occurs(
-                text=candidate.rest,
-            )
-
-            fields.append(
-                DataField(
-                    name=name,
-                    level=candidate.level,
-                    has_child=candidate.has_child,
-                    is_group=candidate.has_child,
-                    occurs=occurs_max is not None,
-                    occurs_min=occurs_min,
-                    occurs_max=occurs_max,
-                    raw_line=candidate.original_line,
-                    rest=candidate.rest,
-                )
-            )
+            fields.append(field)
 
         return fields
 
-    def extract_occurs(
+    def parse_occurs(
         self,
         text: str,
-    ) -> tuple[int | None, int | None]:
-        if not text:
-            return None, None
-
+    ) -> dict:
         match = self.OCCURS_PATTERN.search(
-            text,
+            text or "",
         )
 
         if not match:
-            return None, None
+            return {
+                "occurs": False,
+                "occurs_min": None,
+                "occurs_max": None,
+            }
 
-        occurs_min = int(
-            match.group("min"),
+        occurs_min = self.safe_int(
+            value=match.group("min"),
         )
 
+        occurs_max_raw = match.group("max")
+
         occurs_max = (
-            int(match.group("max"))
-            if match.group("max")
+            self.safe_int(
+                value=occurs_max_raw,
+            )
+            if occurs_max_raw is not None
             else occurs_min
         )
 
-        return occurs_min, occurs_max
+        return {
+            "occurs": True,
+            "occurs_min": occurs_min,
+            "occurs_max": occurs_max,
+        }
 
     def clean_line(
         self,
         line: str,
     ) -> str:
-        if not line:
+        value = str(line or "").strip()
+
+        if not value:
             return ""
 
-        cleaned = str(line).strip()
-        cleaned = cleaned.replace("\u00a0", " ")
-        cleaned = re.sub(r"\s+", " ", cleaned)
+        value = value.replace("\u00a0", " ")
+        value = re.sub(r"\s+", " ", value)
 
-        return cleaned.strip()
+        return value.strip()
+
+    def safe_int(
+        self,
+        value,
+    ) -> int | None:
+        try:
+            if value is None:
+                return None
+
+            return int(value)
+        except Exception:
+            return None

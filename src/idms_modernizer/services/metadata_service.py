@@ -1,42 +1,70 @@
 from idms_modernizer.parsers.text_extractor import (
     TextExtractor,
 )
+
 from idms_modernizer.services.document_segmenter import (
     DocumentSegmenter,
 )
+
 from idms_modernizer.extractors.owner_member_extractor import (
     OwnerMemberExtractor,
 )
+
 from idms_modernizer.extractors.field_extractor import (
     FieldExtractor,
 )
+
 from idms_modernizer.extractors.cobol_zone_extractor import (
     CobolZoneExtractor,
 )
+
 from idms_modernizer.services.schema_picture_enricher import (
     SchemaPictureEnricher,
 )
+
 from idms_modernizer.services.relationship_resolver import (
     RelationshipResolver,
 )
+
 from idms_modernizer.domain.schema_models import (
     SchemaMetadata,
     Record,
 )
+
 from idms_modernizer.extractors.primary_key_extractor import (
     PrimaryKeyExtractor,
-)
-from idms_modernizer.services.name_normalizer import (
-    NameNormalizer,
 )
 
 
 class MetadataService:
+    """
+    Builds schema metadata from IDMS schema listing PDF.
+
+    Generic behavior only:
+    - No DB2 table names are hardcoded.
+    - No DB2 column names are hardcoded.
+    - No business record names are hardcoded.
+
+    Important:
+    - record.fields is physical / DDL-safe and excludes FILLER.
+    - record.mapping_fields is Sheet Mapping-only and includes FILLER.
+    - metadata.relationships must be assigned from RelationshipResolver.
+    """
+
     def __init__(self):
         self.extractor = TextExtractor()
         self.segmenter = DocumentSegmenter()
 
-        self.field_extractor = FieldExtractor()
+        self.field_extractor = FieldExtractor(
+            include_filler=False,
+            auto_number_filler=False,
+        )
+
+        self.mapping_field_extractor = FieldExtractor(
+            include_filler=True,
+            auto_number_filler=True,
+        )
+
         self.picture_enricher = SchemaPictureEnricher()
         self.membership_extractor = OwnerMemberExtractor()
         self.zone_extractor = CobolZoneExtractor()
@@ -71,8 +99,9 @@ class MetadataService:
                 section.lines,
             )
 
-            mapping_discovered_fields = self.field_extractor.extract_all(
+            mapping_discovered_fields = self.mapping_field_extractor.extract_all(
                 section.lines,
+                include_filler=True,
             )
 
             record.fields = self.picture_enricher.enrich(
@@ -80,14 +109,9 @@ class MetadataService:
                 lines=section.lines,
             )
 
-            enriched_mapping_fields = self.picture_enricher.enrich(
+            record.mapping_fields = self.picture_enricher.enrich(
                 fields=mapping_discovered_fields,
                 lines=section.lines,
-            )
-
-            record.mapping_fields = self.merge_structural_metadata(
-                enriched_fields=enriched_mapping_fields,
-                source_fields=mapping_discovered_fields,
             )
 
             record.set_memberships = self.membership_extractor.extract(
@@ -99,60 +123,6 @@ class MetadataService:
                 section.lines,
             )
 
-            primary_key_control_item = self.primary_key_extractor.extract_control_item(
-                section.lines,
-            )
-
-            self.apply_primary_key_control_item(
-                record=record,
-                control_item=primary_key_control_item,
-            )
-
-            print("=" * 80)
-            print(f"FIELDS EXTRACTED FOR {record.name}")
-            print("=" * 80)
-
-            print("PHYSICAL FIELDS:")
-            for field in record.fields:
-                print(
-                    field.name,
-                    field.datatype,
-                    field.length,
-                    field.scale,
-                    field.picture,
-                    field.start_position,
-                    field.end_position,
-                    field.basetype,
-                )
-
-            print("MAPPING FIELDS:")
-            for field in record.mapping_fields:
-                print(
-                    field.name,
-                    "LEVEL=",
-                    field.level,
-                    "GROUP=",
-                    field.is_group,
-                    "HAS_CHILD=",
-                    field.has_child,
-                    "OCCURS=",
-                    field.occurs,
-                    field.occurs_min,
-                    field.occurs_max,
-                    "LEN=",
-                    field.length,
-                    "START=",
-                    field.start_position,
-                    "END=",
-                    field.end_position,
-                )
-
-            print(
-                f"MetadataService: {record.name} "
-                f"PK={record.primary_key} "
-                f"ZONE={record.cobol_zone}"
-            )
-
             metadata.records.append(
                 record,
             )
@@ -161,103 +131,4 @@ class MetadataService:
             metadata,
         )
 
-        print(
-            f"Relationships Found: {len(metadata.relationships)}"
-        )
-
         return metadata
-
-    def merge_structural_metadata(
-        self,
-        enriched_fields,
-        source_fields,
-    ):
-        source_lookup = {
-            NameNormalizer.normalize(field.name): field
-            for field in source_fields
-            if field and field.name
-        }
-
-        merged_fields = []
-
-        for enriched_field in enriched_fields:
-            key = NameNormalizer.normalize(
-                enriched_field.name,
-            )
-
-            source_field = source_lookup.get(
-                key,
-            )
-
-            if source_field is None:
-                merged_fields.append(
-                    enriched_field,
-                )
-                continue
-
-            merged_fields.append(
-                enriched_field.model_copy(
-                    update={
-                        "level": getattr(source_field, "level", None),
-                        "has_child": getattr(source_field, "has_child", False),
-                        "is_group": getattr(source_field, "is_group", False),
-                        "occurs": getattr(source_field, "occurs", False),
-                        "occurs_min": getattr(source_field, "occurs_min", None),
-                        "occurs_max": getattr(source_field, "occurs_max", None),
-                        "raw_line": getattr(source_field, "raw_line", None),
-                        "rest": getattr(source_field, "rest", None),
-                    }
-                )
-            )
-
-        return merged_fields
-
-    def apply_primary_key_control_item(
-        self,
-        record: Record,
-        control_item: dict[str, int] | None,
-    ) -> None:
-        """
-        Applies SET CONTROL ITEM FOR CALC start/length to the primary key field.
-
-        This is required for group CALC keys such as KY-FFRECAB, where the group
-        has no PIC but the schema defines key start/length using the control item.
-        """
-
-        if not record.primary_key:
-            return
-
-        if not control_item:
-            return
-
-        normalized_primary_key = NameNormalizer.normalize(
-            record.primary_key,
-        )
-
-        updated_mapping_fields = []
-
-        for field in record.mapping_fields:
-            field_name = NameNormalizer.normalize(
-                field.name,
-            )
-
-            if field_name != normalized_primary_key:
-                updated_mapping_fields.append(
-                    field,
-                )
-                continue
-
-            updated_mapping_fields.append(
-                field.model_copy(
-                    update={
-                        "datatype": field.datatype or "VARCHAR",
-                        "length": control_item.get("length"),
-                        "scale": None,
-                        "start_position": control_item.get("start_position"),
-                        "end_position": control_item.get("end_position"),
-                        "basetype": field.basetype or "TEXT",
-                    }
-                )
-            )
-
-        record.mapping_fields = updated_mapping_fields

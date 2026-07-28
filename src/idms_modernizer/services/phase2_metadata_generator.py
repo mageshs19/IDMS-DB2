@@ -11,24 +11,6 @@ from idms_modernizer.services.name_normalizer import NameNormalizer
 
 
 class Phase2MetadataGenerator:
-    """
-    Generates Phase 2 metadata JSON from Phase 1 outputs.
-
-    Supports:
-    - Record/table mapping.
-    - Field/column host variable mapping.
-    - Date part mapping for:
-      YEAR / MONTH / DAY
-      YR / MO / DY
-      Y / M / D
-      YY / MM / DD
-      YYYY / MM / DD
-      DY / DM / DD
-    - CALC key mapping.
-    - FK/nullability hints.
-    - Set relationship payload.
-    """
-
     VERSION = "1.0"
 
     DATE_PARTS = {
@@ -76,7 +58,7 @@ class Phase2MetadataGenerator:
         db2_model: DB2Model,
         metadata: SchemaMetadata,
     ) -> str:
-        payload = self.generate(
+        payload = self.generate_payload(
             canonical_schema=canonical_schema,
             db2_model=db2_model,
             metadata=metadata,
@@ -87,7 +69,7 @@ class Phase2MetadataGenerator:
             indent=2,
         )
 
-    def generate(
+    def generate_payload(
         self,
         canonical_schema: CanonicalSchema,
         db2_model: DB2Model,
@@ -101,18 +83,17 @@ class Phase2MetadataGenerator:
             canonical_schema=canonical_schema,
         )
 
-        record_table_map = self.build_record_table_map(
-            canonical_schema=canonical_schema,
-            metadata=metadata,
-        )
-
         records_payload = self.build_records_payload(
             db2_model=db2_model,
         )
 
+        record_table_map = self.build_record_table_map(
+            metadata=metadata,
+            db2_table_lookup=db2_table_lookup,
+        )
+
         field_map = self.build_field_map(
             metadata=metadata,
-            canonical_schema=canonical_schema,
             db2_table_lookup=db2_table_lookup,
             record_table_map=record_table_map,
         )
@@ -133,6 +114,10 @@ class Phase2MetadataGenerator:
         )
 
         nullable_fk_map = self.build_nullable_fk_map(
+            db2_model=db2_model,
+        )
+
+        table_key_map = self.build_table_key_map(
             db2_model=db2_model,
         )
 
@@ -165,76 +150,13 @@ class Phase2MetadataGenerator:
             "relationships": relationships_payload,
             "set_ordering_map": set_ordering_map,
             "nullable_fk_map": nullable_fk_map,
+            "table_key_map": table_key_map,
             "date_part_map": date_part_map,
             "navigation_intent": navigation_intent,
             "output_semantics": output_semantics,
             "validation_messages": validation_messages,
             "canonical_record_lookup_count": len(canonical_record_lookup),
         }
-
-    def build_db2_table_lookup(
-        self,
-        db2_model: DB2Model,
-    ) -> dict[str, DB2Table]:
-        lookup: dict[str, DB2Table] = {}
-
-        for table in getattr(db2_model, "tables", []) or []:
-            table_name = NameNormalizer.normalize(
-                getattr(table, "name", ""),
-            )
-
-            if table_name:
-                lookup[table_name] = table
-
-            suffix_removed = self.remove_record_suffix(
-                table_name,
-            )
-
-            if suffix_removed:
-                lookup[suffix_removed] = table
-
-        return lookup
-
-    def build_canonical_record_lookup(
-        self,
-        canonical_schema: CanonicalSchema,
-    ) -> dict[str, Any]:
-        lookup: dict[str, Any] = {}
-
-        for record in getattr(canonical_schema, "records", []) or []:
-            record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            if record_name:
-                lookup[record_name] = record
-
-        return lookup
-
-    def build_record_table_map(
-        self,
-        canonical_schema: CanonicalSchema,
-        metadata: SchemaMetadata,
-    ) -> dict[str, str]:
-        record_table_map: dict[str, str] = {}
-
-        for record in getattr(canonical_schema, "records", []) or []:
-            canonical_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            if canonical_name:
-                record_table_map[canonical_name] = canonical_name
-
-        for record in getattr(metadata, "records", []) or []:
-            metadata_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            if metadata_name and metadata_name not in record_table_map:
-                record_table_map[metadata_name] = metadata_name
-
-        return record_table_map
 
     def build_records_payload(
         self,
@@ -259,24 +181,134 @@ class Phase2MetadataGenerator:
                         "scale": scale,
                         "nullable": getattr(column, "nullable", True),
                         "primary_key": getattr(column, "primary_key", False),
+                        "generated": getattr(column, "generated", False),
+                        "source_kind": getattr(column, "source_kind", ""),
                     }
                 )
+
+            primary_keys = list(getattr(table, "primary_keys", []) or [])
+
+            if not primary_keys and getattr(table, "primary_key", None):
+                primary_keys = [table.primary_key]
 
             records_payload.append(
                 {
                     "name": getattr(table, "name", ""),
                     "table": getattr(table, "name", ""),
-                    "primary_key": getattr(table, "primary_key", None),
+                    "primary_key": primary_keys[0] if primary_keys else None,
+                    "primary_keys": primary_keys,
                     "fields": fields_payload,
                 }
             )
 
         return records_payload
 
+    def build_table_key_map(
+        self,
+        db2_model: DB2Model,
+    ) -> dict[str, Any]:
+        table_key_map: dict[str, Any] = {}
+
+        for table in getattr(db2_model, "tables", []) or []:
+            table_name = NameNormalizer.normalize(getattr(table, "name", "") or "")
+
+            primary_keys = list(getattr(table, "primary_keys", []) or [])
+
+            if not primary_keys and getattr(table, "primary_key", None):
+                primary_keys = [table.primary_key]
+
+            foreign_keys = []
+
+            for foreign_key in getattr(table, "foreign_keys", []) or []:
+                foreign_keys.append(
+                    {
+                        "column_name": getattr(foreign_key, "column_name", "") or "",
+                        "reference_table": getattr(foreign_key, "reference_table", "") or "",
+                        "reference_column": getattr(foreign_key, "reference_column", "") or "",
+                        "set_name": getattr(foreign_key, "set_name", "") or "",
+                    }
+                )
+
+            if table_name:
+                table_key_map[table_name] = {
+                    "primary_keys": primary_keys,
+                    "foreign_keys": foreign_keys,
+                }
+
+        return table_key_map
+
+    def build_db2_table_lookup(
+        self,
+        db2_model: DB2Model,
+    ) -> dict[str, DB2Table]:
+        lookup: dict[str, DB2Table] = {}
+
+        for table in getattr(db2_model, "tables", []) or []:
+            table_name = NameNormalizer.normalize(
+                getattr(table, "name", "") or "",
+            )
+
+            if table_name:
+                lookup[table_name] = table
+
+            suffix_removed = self.remove_record_suffix(table_name)
+
+            if suffix_removed:
+                lookup[suffix_removed] = table
+
+        return lookup
+
+    def build_canonical_record_lookup(
+        self,
+        canonical_schema: CanonicalSchema,
+    ) -> dict[str, Any]:
+        lookup: dict[str, Any] = {}
+
+        for record in getattr(canonical_schema, "records", []) or []:
+            record_name = NameNormalizer.normalize(
+                getattr(record, "name", "") or "",
+            )
+
+            if record_name:
+                lookup[record_name] = record
+
+            suffix_removed = self.remove_record_suffix(record_name)
+
+            if suffix_removed:
+                lookup[suffix_removed] = record
+
+        return lookup
+
+    def build_record_table_map(
+        self,
+        metadata: SchemaMetadata,
+        db2_table_lookup: dict[str, DB2Table],
+    ) -> dict[str, str]:
+        record_table_map: dict[str, str] = {}
+
+        for record in getattr(metadata, "records", []) or []:
+            record_name = NameNormalizer.normalize(
+                getattr(record, "name", "") or "",
+            )
+
+            if not record_name:
+                continue
+
+            table = db2_table_lookup.get(record_name)
+
+            if table is None:
+                suffix_removed = self.remove_record_suffix(record_name)
+                table = db2_table_lookup.get(suffix_removed)
+
+            record_table_map[record_name] = (
+                getattr(table, "name", "") if table is not None else record_name
+            )
+
+        return record_table_map
+
     def build_field_map(
         self,
         metadata: SchemaMetadata,
-        canonical_schema: CanonicalSchema,
         db2_table_lookup: dict[str, DB2Table],
         record_table_map: dict[str, str],
     ) -> dict[str, dict[str, Any]]:
@@ -284,7 +316,7 @@ class Phase2MetadataGenerator:
 
         for record in getattr(metadata, "records", []) or []:
             idms_record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
+                getattr(record, "name", "") or "",
             )
 
             if not idms_record_name:
@@ -296,67 +328,71 @@ class Phase2MetadataGenerator:
             )
 
             table = db2_table_lookup.get(
-                table_name,
+                NameNormalizer.normalize(table_name),
             )
 
             if table is None:
                 continue
 
-            db2_columns = {
-                NameNormalizer.normalize(getattr(column, "name", "")): column
-                for column in getattr(table, "columns", []) or []
-            }
+            column_lookup = self.build_column_lookup(
+                table=table,
+            )
 
             source_fields = (
                 getattr(record, "mapping_fields", None)
-                or getattr(record, "fields", [])
+                or getattr(record, "fields", None)
                 or []
             )
 
             for field in source_fields:
                 legacy_field_name = NameNormalizer.normalize(
-                    getattr(field, "name", ""),
+                    getattr(field, "name", "") or "",
                 )
 
                 if not legacy_field_name:
                     continue
 
-                physical_column_name = self.find_matching_column(
-                    legacy_field_name=legacy_field_name,
-                    db2_columns=db2_columns,
-                )
+                column = column_lookup.get(legacy_field_name)
 
-                if not physical_column_name:
+                if column is None:
+                    suffix_removed = self.remove_record_suffix(legacy_field_name)
+                    column = column_lookup.get(suffix_removed)
+
+                if column is None:
                     continue
 
-                host = self.host_variable(
-                    record_name=idms_record_name,
-                    column_name=physical_column_name,
-                    remove_suffix=True,
-                )
-
                 field_map[legacy_field_name] = {
-                    "host": host,
                     "record": idms_record_name,
-                    "table": table.name,
-                    "column": physical_column_name,
-                    "legacy_field": legacy_field_name,
+                    "table": getattr(table, "name", ""),
+                    "column": getattr(column, "name", ""),
+                    "host": self.host_variable_name(
+                        record=idms_record_name,
+                        column=getattr(column, "name", ""),
+                    ),
                 }
 
-                suffix_removed_legacy = self.remove_record_suffix(
-                    legacy_field_name,
-                )
-
-                if suffix_removed_legacy and suffix_removed_legacy not in field_map:
-                    field_map[suffix_removed_legacy] = {
-                        "host": host,
-                        "record": idms_record_name,
-                        "table": table.name,
-                        "column": physical_column_name,
-                        "legacy_field": legacy_field_name,
-                    }
-
         return field_map
+
+    def build_column_lookup(
+        self,
+        table: DB2Table,
+    ) -> dict[str, DB2Column]:
+        lookup: dict[str, DB2Column] = {}
+
+        for column in getattr(table, "columns", []) or []:
+            column_name = NameNormalizer.normalize(
+                getattr(column, "name", "") or "",
+            )
+
+            if column_name:
+                lookup[column_name] = column
+
+            suffix_removed = self.remove_record_suffix(column_name)
+
+            if suffix_removed:
+                lookup[suffix_removed] = column
+
+        return lookup
 
     def build_calc_key_map(
         self,
@@ -367,64 +403,49 @@ class Phase2MetadataGenerator:
         calc_key_map: dict[str, dict[str, Any]] = {}
 
         for record in getattr(metadata, "records", []) or []:
-            primary_key = getattr(record, "primary_key", None)
-
-            if not primary_key:
-                continue
-
-            idms_record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            table_name = record_table_map.get(
-                idms_record_name,
-                idms_record_name,
-            )
-
-            normalized_primary_key = NameNormalizer.normalize(
-                primary_key,
-            )
-
-            calc_key_map[idms_record_name] = {
-                "record": idms_record_name,
-                "table": table_name,
-                "key": normalized_primary_key,
-                "primary_key": normalized_primary_key,
-                "column": normalized_primary_key,
-                "host": self.host_variable(
-                    record_name=idms_record_name,
-                    column_name=normalized_primary_key,
-                    remove_suffix=True,
-                ),
-            }
-
-        for record in getattr(canonical_schema, "records", []) or []:
-            primary_key = getattr(record, "primary_key", None)
-
-            if not primary_key:
-                continue
-
             record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
+                getattr(record, "name", "") or "",
             )
 
-            normalized_primary_key = NameNormalizer.normalize(
-                primary_key,
-            )
+            primary_keys = []
 
-            if record_name not in calc_key_map:
-                calc_key_map[record_name] = {
-                    "record": record_name,
-                    "table": record_name,
-                    "key": normalized_primary_key,
-                    "primary_key": normalized_primary_key,
-                    "column": normalized_primary_key,
-                    "host": self.host_variable(
-                        record_name=record_name,
-                        column_name=normalized_primary_key,
-                        remove_suffix=True,
-                    ),
-                }
+            explicit_primary_keys = getattr(record, "primary_keys", None)
+
+            if explicit_primary_keys:
+                if isinstance(explicit_primary_keys, list):
+                    primary_keys.extend(explicit_primary_keys)
+                else:
+                    primary_keys.append(explicit_primary_keys)
+
+            primary_key = getattr(record, "primary_key", None)
+
+            if primary_key:
+                primary_keys.append(primary_key)
+
+            cleaned_primary_keys = []
+
+            for primary_key_value in primary_keys:
+                normalized_primary_key = NameNormalizer.normalize(
+                    primary_key_value,
+                )
+
+                if not normalized_primary_key:
+                    continue
+
+                if normalized_primary_key in cleaned_primary_keys:
+                    continue
+
+                cleaned_primary_keys.append(normalized_primary_key)
+
+            if not cleaned_primary_keys:
+                continue
+
+            calc_key_map[record_name] = {
+                "record": record_name,
+                "table": record_table_map.get(record_name, record_name),
+                "primary_key": cleaned_primary_keys[0],
+                "primary_keys": cleaned_primary_keys,
+            }
 
         return calc_key_map
 
@@ -437,54 +458,62 @@ class Phase2MetadataGenerator:
 
         for relationship in getattr(canonical_schema, "relationships", []) or []:
             parent_record = NameNormalizer.normalize(
-                getattr(relationship, "parent_record", ""),
+                getattr(relationship, "parent_record", None)
+                or getattr(relationship, "owner_record", None)
+                or "",
             )
 
             child_record = NameNormalizer.normalize(
-                getattr(relationship, "child_record", ""),
+                getattr(relationship, "child_record", None)
+                or getattr(relationship, "member_record", None)
+                or "",
             )
 
             set_name = NameNormalizer.normalize(
-                getattr(relationship, "set_name", ""),
+                getattr(relationship, "set_name", None)
+                or getattr(relationship, "name", None)
+                or "",
             )
 
-            parent_table = db2_table_lookup.get(
-                parent_record,
-            )
+            parent_table = db2_table_lookup.get(parent_record)
+            child_table = db2_table_lookup.get(child_record)
 
-            child_table = db2_table_lookup.get(
-                child_record,
-            )
+            parent_keys = []
+            child_fks = []
 
-            parent_key = (
-                getattr(parent_table, "primary_key", None)
-                if parent_table is not None
-                else None
-            )
+            if parent_table is not None:
+                parent_keys = list(getattr(parent_table, "primary_keys", []) or [])
 
-            child_fk = None
-            order_by: list[str] = []
+                if not parent_keys and getattr(parent_table, "primary_key", None):
+                    parent_keys = [parent_table.primary_key]
 
             if child_table is not None:
                 for foreign_key in getattr(child_table, "foreign_keys", []) or []:
-                    if (
-                        parent_table is not None
-                        and NameNormalizer.normalize(getattr(foreign_key, "reference_table", ""))
-                        == NameNormalizer.normalize(getattr(parent_table, "name", ""))
-                    ):
-                        child_fk = getattr(foreign_key, "column_name", None)
-                        order_by = [child_fk] if child_fk else []
-                        break
+                    fk_set_name = NameNormalizer.normalize(
+                        getattr(foreign_key, "set_name", "") or "",
+                    )
+
+                    if set_name and fk_set_name and fk_set_name != set_name:
+                        continue
+
+                    child_fks.append(
+                        getattr(foreign_key, "column_name", "") or "",
+                    )
 
             relationships_payload.append(
                 {
                     "set_name": set_name,
                     "parent_record": parent_record,
                     "child_record": child_record,
-                    "parent_key": parent_key,
-                    "child_fk": child_fk,
-                    "cardinality": getattr(relationship, "cardinality", "1:N") or "1:N",
-                    "order_by": order_by,
+                    "owner_record": parent_record,
+                    "member_record": child_record,
+                    "parent_table": getattr(parent_table, "name", "") if parent_table else "",
+                    "child_table": getattr(child_table, "name", "") if child_table else "",
+                    "parent_key": parent_keys[0] if parent_keys else None,
+                    "parent_keys": parent_keys,
+                    "child_fk": child_fks[0] if child_fks else None,
+                    "child_fks": child_fks,
+                    "order_by": getattr(relationship, "order_by", []) or [],
                 }
             )
 
@@ -497,14 +526,18 @@ class Phase2MetadataGenerator:
         set_ordering_map: dict[str, dict[str, Any]] = {}
 
         for relationship in relationships:
-            set_name = relationship.get(
-                "set_name",
-            )
+            set_name = relationship.get("set_name") or ""
 
             if not set_name:
                 continue
 
             set_ordering_map[set_name] = {
+                "parent_record": relationship.get("parent_record") or "",
+                "child_record": relationship.get("child_record") or "",
+                "parent_key": relationship.get("parent_key"),
+                "parent_keys": relationship.get("parent_keys") or [],
+                "child_fk": relationship.get("child_fk"),
+                "child_fks": relationship.get("child_fks") or [],
                 "order_by": relationship.get("order_by") or [],
             }
 
@@ -513,8 +546,8 @@ class Phase2MetadataGenerator:
     def build_nullable_fk_map(
         self,
         db2_model: DB2Model,
-    ) -> dict[str, bool]:
-        nullable_fk_map: dict[str, bool] = {}
+    ) -> dict[str, Any]:
+        nullable_fk_map: dict[str, Any] = {}
 
         for table in getattr(db2_model, "tables", []) or []:
             column_lookup = {
@@ -526,11 +559,18 @@ class Phase2MetadataGenerator:
                 fk_column_name = getattr(foreign_key, "column_name", "")
                 fk_column = column_lookup.get(fk_column_name)
 
-                nullable_fk_map[f"{table.name}.{fk_column_name}"] = (
-                    getattr(fk_column, "nullable", True)
-                    if fk_column is not None
-                    else True
-                )
+                key = f"{getattr(table, 'name', '')}.{fk_column_name}"
+
+                nullable_fk_map[key] = {
+                    "nullable": (
+                        getattr(fk_column, "nullable", True)
+                        if fk_column is not None
+                        else True
+                    ),
+                    "set_name": getattr(foreign_key, "set_name", "") or "",
+                    "reference_table": getattr(foreign_key, "reference_table", "") or "",
+                    "reference_column": getattr(foreign_key, "reference_column", "") or "",
+                }
 
         return nullable_fk_map
 
@@ -544,7 +584,7 @@ class Phase2MetadataGenerator:
 
         for record in getattr(metadata, "records", []) or []:
             idms_record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
+                getattr(record, "name", "") or "",
             )
 
             if not idms_record_name:
@@ -556,27 +596,27 @@ class Phase2MetadataGenerator:
             )
 
             table = db2_table_lookup.get(
-                table_name,
+                NameNormalizer.normalize(table_name),
             )
 
             if table is None:
                 continue
 
             date_columns = {
-                NameNormalizer.normalize(getattr(column, "name", "")): column
+                NameNormalizer.normalize(getattr(column, "name", "") or ""): column
                 for column in getattr(table, "columns", []) or []
                 if str(getattr(column, "datatype", "")).upper() == "DATE"
             }
 
             source_fields = (
                 getattr(record, "mapping_fields", None)
-                or getattr(record, "fields", [])
+                or getattr(record, "fields", None)
                 or []
             )
 
             for field in source_fields:
                 legacy_field_name = NameNormalizer.normalize(
-                    getattr(field, "name", ""),
+                    getattr(field, "name", "") or "",
                 )
 
                 parsed = self.parse_date_part(
@@ -587,140 +627,61 @@ class Phase2MetadataGenerator:
                     continue
 
                 part = parsed["part"]
-                candidate_columns = parsed["candidate_columns"]
+                date_key = parsed["date_key"]
 
-                physical_date_column = self.find_first_existing_column(
-                    candidates=candidate_columns,
-                    columns=date_columns,
-                )
+                date_column = date_columns.get(date_key)
 
-                if physical_date_column is None:
+                if date_column is None:
+                    suffix_removed = self.remove_record_suffix(date_key)
+                    date_column = date_columns.get(suffix_removed)
+
+                if date_column is None:
                     continue
 
-                date_part_meta = self.DATE_PARTS[part]
-
                 date_part_map[legacy_field_name] = {
-                    "host": self.host_variable(
-                        record_name=idms_record_name,
-                        column_name=physical_date_column,
-                        remove_suffix=True,
-                    ),
                     "record": idms_record_name,
-                    "table": table.name,
-                    "column": physical_date_column,
-                    "date_part": part,
-                    "substring_start": date_part_meta["substring_start"],
-                    "substring_length": date_part_meta["substring_length"],
+                    "table": getattr(table, "name", ""),
+                    "column": getattr(date_column, "name", ""),
+                    "host": self.host_variable_name(
+                        record=idms_record_name,
+                        column=getattr(date_column, "name", ""),
+                    ),
+                    "substring_start": self.DATE_PARTS[part]["substring_start"],
+                    "substring_length": self.DATE_PARTS[part]["substring_length"],
+                    "part": part,
                 }
 
         return date_part_map
-
-    def build_navigation_intent(
-        self,
-        relationships: list[dict[str, Any]],
-    ) -> dict[str, dict[str, Any]]:
-        navigation_intent: dict[str, dict[str, Any]] = {}
-
-        for relationship in relationships:
-            set_name = relationship.get(
-                "set_name",
-            )
-
-            if not set_name:
-                continue
-
-            navigation_intent[set_name] = {
-                "access_pattern": "SET_NAVIGATION",
-                "parent_record": relationship.get("parent_record"),
-                "child_record": relationship.get("child_record"),
-                "parent_key": relationship.get("parent_key"),
-                "child_fk": relationship.get("child_fk"),
-                "order_by": relationship.get("order_by") or [],
-            }
-
-        return navigation_intent
-
-    def build_output_semantics(
-        self,
-    ) -> dict[str, Any]:
-        return {
-            "generated_by": "idms-db2-modernizer-phase1",
-            "usage": "IDMS retrieval COBOL to DB2 embedded SQL conversion",
-            "physical_types_source": "DB2_DDL",
-            "logical_mapping_source": "PHASE1_CANONICAL_METADATA",
-        }
-
-    def build_validation_messages(
-        self,
-        canonical_schema: CanonicalSchema,
-        db2_model: DB2Model,
-        metadata: SchemaMetadata,
-        field_map: dict[str, dict[str, Any]],
-    ) -> list[str]:
-        messages: list[str] = []
-
-        if not getattr(canonical_schema, "records", []):
-            messages.append("No canonical records found.")
-
-        if not getattr(db2_model, "tables", []):
-            messages.append("No DB2 tables found.")
-
-        if not getattr(metadata, "records", []):
-            messages.append("No IDMS metadata records found.")
-
-        if not field_map:
-            messages.append("No field map entries generated.")
-
-        for table in getattr(db2_model, "tables", []) or []:
-            primary_key = getattr(table, "primary_key", None)
-
-            if not primary_key:
-                continue
-
-            column_names = {
-                NameNormalizer.normalize(getattr(column, "name", ""))
-                for column in getattr(table, "columns", []) or []
-            }
-
-            if NameNormalizer.normalize(primary_key) not in column_names:
-                messages.append(
-                    f"Table {table.name} primary key {primary_key} is not present as a DB2 column."
-                )
-
-        return messages
-
-    def find_matching_column(
-        self,
-        legacy_field_name: str,
-        db2_columns: dict[str, DB2Column],
-    ) -> str | None:
-        normalized = NameNormalizer.normalize(
-            legacy_field_name,
-        )
-
-        if normalized in db2_columns:
-            return normalized
-
-        suffix_removed = self.remove_record_suffix(
-            normalized,
-        )
-
-        for column_name in db2_columns:
-            if self.remove_record_suffix(column_name) == suffix_removed:
-                return column_name
-
-        return None
 
     def parse_date_part(
         self,
         field_name: str,
     ) -> dict[str, Any] | None:
-        tokens = self.split_tokens(
-            value=field_name,
+        candidates = self.parse_date_part_candidates(
+            field_name=field_name,
         )
 
-        if len(tokens) < 2:
+        if not candidates:
             return None
+
+        return candidates[0]
+
+    def parse_date_part_candidates(
+        self,
+        field_name: str,
+    ) -> list[dict[str, Any]]:
+        normalized = NameNormalizer.normalize(field_name or "")
+
+        if not normalized:
+            return []
+
+        tokens = [
+            token
+            for token in normalized.split("_")
+            if token
+        ]
+
+        candidates = []
 
         for index, token in enumerate(tokens):
             part = self.date_part_type(
@@ -731,24 +692,20 @@ class Phase2MetadataGenerator:
             if part is None:
                 continue
 
-            base_tokens = tokens[:index] + tokens[index + 1 :]
             date_tokens = tokens.copy()
             date_tokens[index] = "DATE"
 
-            base_name = " ".join(base_tokens)
-            date_name = " ".join(date_tokens)
+            date_key = "_".join(date_tokens)
 
-            return {
-                "part": part,
-                "candidate_columns": self.unique_values(
-                    [
-                        date_name,
-                        base_name,
-                    ]
-                ),
-            }
+            candidates.append(
+                {
+                    "date_key": date_key,
+                    "part": part,
+                    "tokens": date_tokens,
+                }
+            )
 
-        return None
+        return candidates
 
     def date_part_type(
         self,
@@ -780,69 +737,77 @@ class Phase2MetadataGenerator:
 
         return None
 
-    def find_first_existing_column(
+    def build_navigation_intent(
         self,
-        candidates: list[str],
-        columns: dict[str, DB2Column],
-    ) -> str | None:
-        for candidate in candidates:
-            normalized_candidate = NameNormalizer.normalize(
-                candidate,
-            )
+        relationships: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {
+            "relationships_available": bool(relationships),
+            "set_count": len(relationships),
+        }
 
-            if normalized_candidate in columns:
-                return normalized_candidate
-
-            suffix_removed_candidate = self.remove_record_suffix(
-                normalized_candidate,
-            )
-
-            for column_name in columns:
-                if self.remove_record_suffix(column_name) == suffix_removed_candidate:
-                    return column_name
-
-        return None
-
-    def host_variable(
+    def build_output_semantics(
         self,
-        record_name: str,
-        column_name: str,
-        remove_suffix: bool = True,
-    ) -> str:
-        record = NameNormalizer.normalize(
-            record_name,
-        ).replace(
-            " ",
-            "-",
-        )
+    ) -> dict[str, Any]:
+        return {
+            "db2_key_values": ["PK", "FK", "PK/FK"],
+            "generated_primary_key_rule": "ID_RECORD_<record_name>",
+            "generated_primary_key_datatype": "DECIMAL(18)",
+            "foreign_key_rule": "Use SET relationship and owner primary key columns only.",
+            "character_rule": "CHAR by default; VARCHAR only when length equals 100.",
+            "numeric_rule": "Numeric COBOL PIC maps to DECIMAL.",
+            "date_rule": "Date part recognition remains generic for YEAR, YR, Y, YY, YYYY, DY, MONTH, MON, MO, M, MM, DM, DAY, D, DD.",
+        }
 
-        column = NameNormalizer.normalize(
-            column_name,
-        )
+    def build_validation_messages(
+        self,
+        canonical_schema: CanonicalSchema,
+        db2_model: DB2Model,
+        metadata: SchemaMetadata,
+        field_map: dict[str, dict[str, Any]],
+    ) -> list[str]:
+        messages: list[str] = []
 
-        if remove_suffix:
-            column = self.remove_record_suffix(
-                column,
-            )
+        if not getattr(db2_model, "tables", []) or []:
+            messages.append("No DB2 tables found.")
 
-        column = column.replace(
-            " ",
-            "-",
-        )
+        if not getattr(metadata, "records", []) or []:
+            messages.append("No IDMS metadata records found.")
 
-        return f"HV-{record}-{column}"
+        if not field_map:
+            messages.append("No field map entries generated.")
+
+        for table in getattr(db2_model, "tables", []) or []:
+            primary_keys = list(getattr(table, "primary_keys", []) or [])
+
+            if not primary_keys and getattr(table, "primary_key", None):
+                primary_keys = [table.primary_key]
+
+            if not primary_keys:
+                messages.append(f"Table {table.name} has no primary key.")
+                continue
+
+            column_names = {
+                NameNormalizer.normalize(getattr(column, "name", "") or "")
+                for column in getattr(table, "columns", []) or []
+            }
+
+            for primary_key in primary_keys:
+                if NameNormalizer.normalize(primary_key) not in column_names:
+                    messages.append(
+                        f"Table {table.name} primary key {primary_key} is not present as a DB2 column."
+                    )
+
+        return messages
 
     def parse_db2_datatype(
         self,
         datatype: str,
     ) -> tuple[str, int | None, int | None]:
-        value = (
-            datatype
-            or "VARCHAR(255)"
-        ).strip().upper()
+        value = (datatype or "").strip().upper()
 
         decimal_match = re.match(
-            r"^(DECIMAL|NUMERIC)$(\d+),\s*(\d+)$$",
+            r"^(DECIMAL|NUMERIC)$(\d+)(?:,\s*(\d+))?$$",
             value,
         )
 
@@ -850,29 +815,20 @@ class Phase2MetadataGenerator:
             return (
                 "DECIMAL",
                 int(decimal_match.group(2)),
-                int(decimal_match.group(3)),
+                int(decimal_match.group(3) or 0),
             )
 
-        varchar_match = re.match(
-            r"^(VARCHAR|CHAR)$(\d+)$$",
+        char_match = re.match(
+            r"^(VARCHAR|CHAR|CHARACTER)$(\d+)$$",
             value,
         )
 
-        if varchar_match:
+        if char_match:
             return (
-                varchar_match.group(1),
-                int(varchar_match.group(2)),
+                "VARCHAR" if char_match.group(1) == "VARCHAR" else "CHAR",
+                int(char_match.group(2)),
                 None,
             )
-
-        if value in {"INTEGER", "INT"}:
-            return "INTEGER", 9, 0
-
-        if value == "BIGINT":
-            return "BIGINT", 18, 0
-
-        if value == "SMALLINT":
-            return "INTEGER", 9, 0
 
         if value == "DATE":
             return "DATE", None, None
@@ -880,70 +836,28 @@ class Phase2MetadataGenerator:
         if value == "TIMESTAMP":
             return "TIMESTAMP", None, None
 
-        return value, None, None
+        return value or "CHAR", None, None
+
+    def host_variable_name(
+        self,
+        record: str,
+        column: str,
+    ) -> str:
+        record_name = NameNormalizer.normalize(record or "")
+        column_name = NameNormalizer.normalize(column or "")
+        return f"HV-{record_name}-{column_name}"
 
     def remove_record_suffix(
         self,
-        field_name: str,
-    ) -> str:
-        normalized = NameNormalizer.normalize(
-            field_name,
-        )
-
-        parts = normalized.split()
-
-        if (
-            len(parts) > 1
-            and parts[-1].isdigit()
-            and len(parts[-1]) == 4
-        ):
-            return " ".join(
-                parts[:-1],
-            )
-
-        return normalized
-
-    def split_tokens(
-        self,
         value: str,
-    ) -> list[str]:
-        normalized = NameNormalizer.normalize(
-            value,
+    ) -> str:
+        text = NameNormalizer.normalize(value or "")
+
+        if not text:
+            return ""
+
+        return re.sub(
+            r"_[0-9]{4}$",
+            "",
+            text,
         )
-
-        return [
-            token.upper()
-            for token in re.split(
-                r"[\s_-]+",
-                normalized,
-            )
-            if token
-        ]
-
-    def unique_values(
-        self,
-        values: list[str],
-    ) -> list[str]:
-        result: list[str] = []
-        seen: set[str] = set()
-
-        for value in values:
-            normalized = NameNormalizer.normalize(
-                value,
-            )
-
-            if not normalized:
-                continue
-
-            if normalized in seen:
-                continue
-
-            seen.add(
-                normalized,
-            )
-
-            result.append(
-                normalized,
-            )
-
-        return result

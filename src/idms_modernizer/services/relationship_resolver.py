@@ -1,70 +1,98 @@
 from collections import defaultdict
 
 from idms_modernizer.domain.relationship_models import (
-    Relationship
+    Relationship,
 )
 
 
 class RelationshipResolver:
+    """
+    Resolves IDMS SET owner/member relationships from record set memberships.
+
+    Generic behavior only:
+    - No hardcoded SET names.
+    - No hardcoded record names.
+    - OWNER and MEMBER are read from schema listing memberships.
+    """
 
     def resolve(
         self,
-        metadata
+        metadata,
     ) -> list[Relationship]:
+        owner_map: dict[str, list[str]] = defaultdict(list)
+        member_map: dict[str, list[str]] = defaultdict(list)
 
-        owner_map = defaultdict(list)
+        for record in getattr(metadata, "records", []) or []:
+            record_name = getattr(record, "name", "") or ""
 
-        member_map = defaultdict(list)
+            if not record_name:
+                continue
 
-        for record in metadata.records:
+            for membership in getattr(record, "set_memberships", []) or []:
+                set_name = (
+                    getattr(membership, "set_name", None)
+                    or getattr(membership, "name", None)
+                    or ""
+                )
 
-            for membership in record.set_memberships:
+                role = (
+                    getattr(membership, "role", None)
+                    or getattr(membership, "relation_type", None)
+                    or getattr(membership, "type", None)
+                    or ""
+                )
 
-                if membership.role == "OWNER":
+                set_name = str(set_name or "").strip().upper()
+                role = str(role or "").strip().upper()
 
-                    owner_map[
-                        membership.set_name
-                    ].append(
-                        record.name
-                    )
+                if not set_name:
+                    continue
 
-                elif membership.role == "MEMBER":
+                if not role:
+                    continue
 
-                    member_map[
-                        membership.set_name
-                    ].append(
-                        record.name
-                    )
+                if set_name == "CALC":
+                    continue
 
-        relationships = []
+                if role == "OWNER":
+                    if record_name not in owner_map[set_name]:
+                        owner_map[set_name].append(record_name)
 
-        all_sets = (
-            set(owner_map.keys())
-            | set(member_map.keys())
-        )
+                elif role == "MEMBER":
+                    if record_name not in member_map[set_name]:
+                        member_map[set_name].append(record_name)
 
-        for set_name in all_sets:
+        relationships: list[Relationship] = []
 
-            owners = owner_map.get(
-                set_name,
-                []
-            )
+        all_sets = set(owner_map.keys()) | set(member_map.keys())
 
-            members = member_map.get(
-                set_name,
-                []
-            )
+        for set_name in sorted(all_sets):
+            owners = owner_map.get(set_name, [])
+            members = member_map.get(set_name, [])
+
+            if not owners:
+                continue
+
+            if not members:
+                continue
 
             for owner in owners:
-
                 for member in members:
+                    if not owner or not member:
+                        continue
+
+                    if owner == member:
+                        continue
 
                     relationships.append(
                         Relationship(
                             set_name=set_name,
                             owner_record=owner,
-                            member_record=member
+                            member_record=member,
+                            cardinality="1:N",
                         )
                     )
+
+        metadata.relationships = relationships
 
         return relationships

@@ -5,29 +5,28 @@ from idms_modernizer.domain.db2_models import (
     DB2Table,
     DB2Column,
 )
-from idms_modernizer.domain.schema_models import (
-    SchemaMetadata,
-)
-from idms_modernizer.services.name_normalizer import (
-    NameNormalizer,
-)
+from idms_modernizer.domain.schema_models import SchemaMetadata
+from idms_modernizer.services.name_normalizer import NameNormalizer
 
 
 class ExcelSheetMappingService:
     """
-    Builds the Excel Sheet Mapping table as rows.
+    Builds Excel Sheet Mapping rows.
 
-    Final behavior:
-    - Uses record.mapping_fields when available, so Excel shows all fields:
-      groups, leaves, outer dates, inner date parts, key groups, attributes,
-      and OCCURS groups.
-    - DDL/DB2 mapping is shown only for real DB2 physical columns.
-    - Outer date groups map to DB2 DATE columns.
-    - Inner date parts stay visible but DB2 mapping stays blank.
-    - CALC appears when the current COBOL field matches record.primary_key.
-    - SET appears only when DB2 Key contains FK.
-    - No synthetic FK rows.
-    - No fallback SET rows.
+    Generic behavior only:
+    - No DB2 table names are hardcoded.
+    - No DB2 column names are hardcoded.
+    - No business record names are hardcoded.
+    - No SET names are hardcoded.
+    - Uses metadata and DB2 model only.
+
+    SET / FK behavior:
+    - SET appears as a value in IDMS Key.
+    - FK appears as a value in DB2 Key.
+    - There is no separate SET column.
+    - SET/FK rows are added record-wise after audit rows.
+    - If DB2 model already has foreign_keys, those are used.
+    - If DB2 model does not have foreign_keys, rows are still inferred from metadata.relationships and owner PK columns.
     """
 
     COLUMNS = [
@@ -39,7 +38,7 @@ class ExcelSheetMappingService:
         "Field end position",
         "DB2 Key",
         "New DB2 Record",
-        "New DB2 Field_name",
+        "New DB2 Field name",
         "New DB2 Data Type",
         "Hopex Expression TypeRemark",
         "Relation",
@@ -79,6 +78,8 @@ class ExcelSheetMappingService:
         metadata: SchemaMetadata,
         db2_model: DB2Model,
     ) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+
         table_lookup = self.build_table_lookup(
             db2_model=db2_model,
         )
@@ -87,417 +88,541 @@ class ExcelSheetMappingService:
             metadata=metadata,
         )
 
-        rows: list[dict[str, str]] = []
+        for record in getattr(metadata, "records", []) or []:
+            record_name = getattr(record, "name", "") or ""
 
-        for record in metadata.records:
-            record_name = NameNormalizer.normalize(
-                record.name,
+            table = self.find_table_for_record(
+                record_name=record_name,
+                table_lookup=table_lookup,
             )
 
-            table = table_lookup.get(
-                record_name,
+            rows.extend(
+                self.build_record_mapping_rows(
+                    record=record,
+                    table=table,
+                    relationship_lookup=relationship_lookup,
+                )
             )
 
-            column_lookup = (
-                self.build_column_lookup(
+            rows.extend(
+                self.build_generated_pk_rows(
+                    record=record,
                     table=table,
                 )
-                if table is not None
-                else {}
             )
 
-            mapping_fields = (
-                getattr(record, "mapping_fields", None)
-                or record.fields
-                or []
-            )
-
-            date_group_info = self.collect_date_group_info(
-                fields=mapping_fields,
-            )
-
-            emitted_date_rows: set[str] = set()
-
-            for field in mapping_fields:
-                field_name = NameNormalizer.normalize(
-                    getattr(field, "name", ""),
+            rows.extend(
+                self.build_audit_rows(
+                    record=record,
+                    table=table,
                 )
+            )
 
-                is_actual_outer_date = self.is_actual_outer_date_field(
+            rows.extend(
+                self.build_set_fk_rows_for_record(
+                    metadata=metadata,
+                    record=record,
+                    table=table,
+                    table_lookup=table_lookup,
+                )
+            )
+
+        return rows
+
+    def build_record_mapping_rows(
+        self,
+        record,
+        table: DB2Table | None,
+        relationship_lookup: dict[str, str],
+    ) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+
+        column_lookup = (
+            self.build_column_lookup(table=table)
+            if table is not None
+            else {}
+        )
+
+        mapping_fields = (
+            getattr(record, "mapping_fields", None)
+            or getattr(record, "fields", None)
+            or []
+        )
+
+        date_group_info = self.collect_date_group_info(
+            fields=mapping_fields,
+        )
+
+        for field in mapping_fields:
+            if self.is_filler_field(field=field):
+                rows.append(
+                    self.build_filler_row(
+                        record=record,
+                        field=field,
+                    )
+                )
+                continue
+
+            field_name = NameNormalizer.normalize(
+                getattr(field, "name", "") or ""
+            )
+
+            is_outer_date = self.is_actual_outer_date_field(
+                field=field,
+                date_group_info=date_group_info,
+            )
+
+            is_date_child = (
+                self.inferred_date_key_for_date_part(
+                    field_name=field_name,
+                )
+                is not None
+            )
+
+            db2_column = None
+
+            if not is_date_child:
+                db2_column = self.find_column_for_field(
                     field=field,
+                    column_lookup=column_lookup,
                     date_group_info=date_group_info,
                 )
 
-                if is_actual_outer_date:
-                    outer_date_key = self.outer_date_key_for_field(
-                        field=field,
-                        date_group_info=date_group_info,
+            db2_key = self.db2_key_label(
+                table=table,
+                column=db2_column,
+            )
+
+            row = self.empty_row()
+
+            row["Cobol Record IDMS"] = getattr(record, "name", "") or ""
+            row["Cobol Zone"] = self.format_cobol_zone(field=field)
+
+            row["IDMS Key"] = self.idms_key_label(
+                record=record,
+                field=field,
+                db2_key=db2_key,
+            )
+
+            row["IDMS PIC Clause"] = self.get_field_picture(
+                field=field,
+            )
+
+            row["Length of Field Bytes"] = self.to_string(
+                self.get_field_length(field=field)
+            )
+
+            row["Field end position"] = self.to_string(
+                self.get_field_end_position(field=field)
+            )
+
+            row["DB2 Key"] = db2_key
+
+            if is_outer_date:
+                if table is not None:
+                    row["New DB2 Record"] = getattr(table, "name", "") or ""
+
+                row["New DB2 Field name"] = ""
+
+                if db2_column is not None:
+                    row["New DB2 Data Type"] = self.get_db2_datatype(
+                        db2_column=db2_column,
                     )
+                else:
+                    row["New DB2 Data Type"] = "DATE"
 
-                    if outer_date_key:
-                        emitted_date_rows.add(
-                            outer_date_key,
-                        )
+            elif is_date_child:
+                row["New DB2 Record"] = ""
+                row["New DB2 Field name"] = ""
+                row["New DB2 Data Type"] = ""
+                row["DB2 Key"] = ""
 
-                inferred_date_key = self.inferred_date_key_for_date_part(
-                    field_name=field_name,
-                )
-
-                if (
-                    inferred_date_key
-                    and inferred_date_key in date_group_info
-                    and inferred_date_key not in emitted_date_rows
-                    and date_group_info[inferred_date_key].get("actual_outer_field") is None
-                ):
-                    inferred_row = self.build_inferred_date_row(
-                        record=record,
-                        table=table,
-                        column_lookup=column_lookup,
-                        relationship_text=relationship_lookup.get(
-                            record_name,
-                            "",
-                        ),
-                        group_info=date_group_info[inferred_date_key],
-                    )
-
-                    if inferred_row is not None:
-                        rows.append(
-                            inferred_row,
-                        )
-
-                        emitted_date_rows.add(
-                            inferred_date_key,
-                        )
-
-                is_date_part = self.is_date_part_name(
-                    field_name=field_name,
-                )
-
-                db2_column = None
-
-                if not is_date_part:
-                    db2_column = self.find_column_for_field(
-                        field=field,
-                        column_lookup=column_lookup,
-                        date_group_info=date_group_info,
-                    )
-
-                db2_key = self.db2_key_label(
-                    table=table,
-                    column=db2_column,
-                )
-
-                row = self.empty_row()
-
-                row["Cobol Record IDMS"] = record.name or ""
-
-                row["Cobol Zone"] = self.build_cobol_zone_value(
-                    record=record,
-                    field=field,
-                    db2_column=db2_column,
-                )
-
-                row["IDMS Key"] = self.idms_key_label(
-                    record=record,
-                    field=field,
-                    db2_key=db2_key,
-                )
-
-                row["IDMS PIC Clause"] = self.get_field_picture(
-                    field=field,
-                )
-
-                row["Length of Field Bytes"] = self.to_string(
-                    self.get_field_length(
-                        field=field,
-                    )
-                )
-
-                row["Field end position"] = self.to_string(
-                    self.get_field_end_position(
-                        field=field,
-                    )
-                )
-
-                row["DB2 Key"] = db2_key
-
-                row["New DB2 Record"] = (
-                    table.name
-                    if db2_column is not None
-                    and table is not None
-                    and getattr(table, "name", None)
-                    else ""
-                )
-
-                row["New DB2 Field_name"] = (
-                    db2_column.name
-                    if db2_column is not None and getattr(db2_column, "name", None)
-                    else ""
-                )
-
+            elif db2_column is not None and table is not None:
+                row["New DB2 Record"] = getattr(table, "name", "") or ""
+                row["New DB2 Field name"] = getattr(db2_column, "name", "") or ""
                 row["New DB2 Data Type"] = self.get_db2_datatype(
                     db2_column=db2_column,
                 )
 
-                row["Hopex Expression TypeRemark"] = self.hopex_remark(
-                    field=field,
-                )
+            row["Hopex Expression TypeRemark"] = self.hopex_remark(
+                field=field,
+            )
 
-                row["Relation"] = relationship_lookup.get(
-                    record_name,
-                    "",
-                )
+            row["Relation"] = relationship_lookup.get(
+                NameNormalizer.normalize(getattr(record, "name", "") or ""),
+                "",
+            )
 
-                row["Reference Field Name (CopyBook) "] = ""
-                row["Reference Field PIC Clause"] = ""
-                row["Cross Application DB2 Field Name"] = ""
-                row["Cross Appln DB2 Data Type"] = ""
+            row["Basetype"] = self.get_field_basetype(
+                field=field,
+            )
 
-                row["Basetype"] = self.get_field_basetype(
-                    field=field,
-                )
-
-                rows.append(
-                    row,
-                )
-
-            for date_key, group_info in date_group_info.items():
-                if date_key in emitted_date_rows:
-                    continue
-
-                if group_info.get("actual_outer_field") is not None:
-                    continue
-
-                inferred_row = self.build_inferred_date_row(
-                    record=record,
-                    table=table,
-                    column_lookup=column_lookup,
-                    relationship_text=relationship_lookup.get(
-                        record_name,
-                        "",
-                    ),
-                    group_info=group_info,
-                )
-
-                if inferred_row is not None:
-                    rows.append(
-                        inferred_row,
-                    )
-
-                    emitted_date_rows.add(
-                        date_key,
-                    )
+            rows.append(row)
 
         return rows
 
-    def collect_date_group_info(
-        self,
-        fields,
-    ) -> dict[str, dict]:
-        groups: dict[str, dict] = {}
-
-        for field in fields:
-            parsed_candidates = self.parse_date_part_candidates(
-                field_name=getattr(field, "name", ""),
-            )
-
-            for parsed in parsed_candidates:
-                key = parsed["date_key"]
-
-                if key not in groups:
-                    groups[key] = {
-                        "date_key": key,
-                        "parts": {},
-                        "candidate_names": parsed["candidate_names"],
-                        "actual_outer_field": None,
-                    }
-
-                groups[key]["parts"][parsed["part"]] = field
-
-                for candidate_name in parsed["candidate_names"]:
-                    if candidate_name not in groups[key]["candidate_names"]:
-                        groups[key]["candidate_names"].append(
-                            candidate_name,
-                        )
-
-        for field in fields:
-            field_name = NameNormalizer.normalize(
-                getattr(field, "name", ""),
-            )
-
-            if not field_name:
-                continue
-
-            if self.is_date_part_name(
-                field_name=field_name,
-            ):
-                continue
-
-            for key, info in groups.items():
-                candidate_names = info.get(
-                    "candidate_names",
-                    [],
-                )
-
-                if any(
-                    self.same_column_name(
-                        field_name,
-                        candidate_name,
-                    )
-                    for candidate_name in candidate_names
-                ):
-                    info["actual_outer_field"] = field
-
-        return {
-            key: value
-            for key, value in groups.items()
-            if self.has_complete_date_group(
-                value.get("parts", {}),
-            )
-        }
-
-    def is_actual_outer_date_field(
-        self,
-        field,
-        date_group_info: dict[str, dict],
-    ) -> bool:
-        field_name = NameNormalizer.normalize(
-            getattr(field, "name", ""),
-        )
-
-        if not field_name:
-            return False
-
-        for group_info in date_group_info.values():
-            actual_outer_field = group_info.get(
-                "actual_outer_field",
-            )
-
-            if actual_outer_field is None:
-                continue
-
-            actual_outer_name = NameNormalizer.normalize(
-                getattr(actual_outer_field, "name", ""),
-            )
-
-            if self.same_column_name(
-                field_name,
-                actual_outer_name,
-            ):
-                return True
-
-        return False
-
-    def outer_date_key_for_field(
-        self,
-        field,
-        date_group_info: dict[str, dict],
-    ) -> str | None:
-        field_name = NameNormalizer.normalize(
-            getattr(field, "name", ""),
-        )
-
-        if not field_name:
-            return None
-
-        for date_key, group_info in date_group_info.items():
-            actual_outer_field = group_info.get(
-                "actual_outer_field",
-            )
-
-            if actual_outer_field is None:
-                continue
-
-            actual_outer_name = NameNormalizer.normalize(
-                getattr(actual_outer_field, "name", ""),
-            )
-
-            if self.same_column_name(
-                field_name,
-                actual_outer_name,
-            ):
-                return date_key
-
-        return None
-
-    def build_inferred_date_row(
+    def build_filler_row(
         self,
         record,
-        table,
-        column_lookup,
-        relationship_text: str,
-        group_info: dict,
-    ) -> dict[str, str] | None:
-        candidate_names = group_info.get(
-            "candidate_names",
-            [],
-        )
-
-        date_column = self.find_first_matching_column(
-            candidate_names=candidate_names,
-            column_lookup=column_lookup,
-        )
-
-        if date_column is None:
-            return None
-
-        display_name = self.best_display_date_name(
-            candidate_names=candidate_names,
-            date_column=date_column,
-        )
-
-        level = self.inferred_parent_level(
-            parts=group_info.get(
-                "parts",
-                {},
-            ),
-        )
-
-        db2_key = self.db2_key_label(
-            table=table,
-            column=date_column,
-        )
-
+        field,
+    ) -> dict[str, str]:
         row = self.empty_row()
 
         row["Cobol Record IDMS"] = getattr(record, "name", "") or ""
+        row["Cobol Zone"] = self.format_cobol_zone(field=field)
+        row["IDMS PIC Clause"] = self.get_field_picture(field=field)
 
-        row["Cobol Zone"] = self.format_cobol_level_and_name(
-            level=level,
-            name=self.to_cobol_name(display_name),
+        row["Length of Field Bytes"] = self.to_string(
+            self.get_field_length(field=field)
         )
 
-        row["IDMS Key"] = ""
-        row["IDMS PIC Clause"] = ""
-        row["Length of Field Bytes"] = ""
-        row["Field end position"] = ""
-        row["DB2 Key"] = db2_key
-
-        row["New DB2 Record"] = (
-            table.name
-            if table is not None and getattr(table, "name", None)
-            else ""
+        row["Field end position"] = self.to_string(
+            self.get_field_end_position(field=field)
         )
-
-        row["New DB2 Field_name"] = (
-            date_column.name
-            if getattr(date_column, "name", None)
-            else ""
-        )
-
-        row["New DB2 Data Type"] = self.get_db2_datatype(
-            db2_column=date_column,
-        )
-
-        row["Hopex Expression TypeRemark"] = ""
-        row["Relation"] = relationship_text
-        row["Reference Field Name (CopyBook) "] = ""
-        row["Reference Field PIC Clause"] = ""
-        row["Cross Application DB2 Field Name"] = ""
-        row["Cross Appln DB2 Data Type"] = ""
-        row["Basetype"] = "DATE"
 
         return row
+
+    def build_generated_pk_rows(
+        self,
+        record,
+        table: DB2Table | None,
+    ) -> list[dict[str, str]]:
+        if table is None:
+            return []
+
+        rows: list[dict[str, str]] = []
+
+        for column in getattr(table, "columns", []) or []:
+            if getattr(column, "source_kind", "") != "GENERATED_PK":
+                continue
+
+            row = self.empty_row()
+
+            row["Cobol Record IDMS"] = getattr(record, "name", "") or ""
+            row["DB2 Key"] = "PK"
+            row["New DB2 Record"] = getattr(table, "name", "") or ""
+            row["New DB2 Field name"] = getattr(column, "name", "") or ""
+            row["New DB2 Data Type"] = self.get_db2_datatype(
+                db2_column=column,
+            )
+
+            rows.append(row)
+
+        return rows
+
+    def build_audit_rows(
+        self,
+        record,
+        table: DB2Table | None,
+    ) -> list[dict[str, str]]:
+        if table is None:
+            return []
+
+        rows: list[dict[str, str]] = []
+
+        record_name = getattr(record, "name", "") or ""
+        normalized_record_name = self.to_db2_name(record_name)
+
+        audit_fields = [
+            (f"TS_CREATE_{normalized_record_name}", "TIMESTAMP"),
+            (f"TS_UPDATE_{normalized_record_name}", "TIMESTAMP"),
+            (f"ID_USERID_{normalized_record_name}", "CHAR(8)"),
+        ]
+
+        for field_name, datatype in audit_fields:
+            row = self.empty_row()
+
+            row["Cobol Record IDMS"] = record_name
+            row["New DB2 Record"] = getattr(table, "name", "") or ""
+            row["New DB2 Field name"] = field_name
+            row["New DB2 Data Type"] = datatype
+
+            rows.append(row)
+
+        return rows
+
+    def build_set_fk_rows_for_record(
+        self,
+        metadata: SchemaMetadata,
+        record,
+        table: DB2Table | None,
+        table_lookup: dict[str, DB2Table],
+    ) -> list[dict[str, str]]:
+        if table is None:
+            return []
+
+        rows: list[dict[str, str]] = []
+        emitted: set[tuple[str, str, str, str]] = set()
+
+        rows.extend(
+            self.build_set_fk_rows_from_db2_foreign_keys(
+                table=table,
+                emitted=emitted,
+            )
+        )
+
+        rows.extend(
+            self.build_set_fk_rows_from_metadata_relationships(
+                metadata=metadata,
+                record=record,
+                member_table=table,
+                table_lookup=table_lookup,
+                emitted=emitted,
+            )
+        )
+
+        return rows
+
+    def build_set_fk_rows_from_db2_foreign_keys(
+        self,
+        table: DB2Table,
+        emitted: set[tuple[str, str, str, str]],
+    ) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+
+        column_lookup = {
+            NameNormalizer.normalize(getattr(column, "name", "") or ""): column
+            for column in getattr(table, "columns", []) or []
+        }
+
+        for foreign_key in getattr(table, "foreign_keys", []) or []:
+            fk_column_name = self.get_foreign_key_column_name(
+                foreign_key=foreign_key,
+            )
+
+            if not fk_column_name:
+                continue
+
+            fk_column = column_lookup.get(
+                NameNormalizer.normalize(fk_column_name)
+            )
+
+            if fk_column is None:
+                continue
+
+            set_name = getattr(foreign_key, "set_name", "") or ""
+
+            key = (
+                NameNormalizer.normalize(set_name),
+                NameNormalizer.normalize(getattr(table, "name", "") or ""),
+                NameNormalizer.normalize(getattr(fk_column, "name", "") or ""),
+                self.get_db2_datatype(db2_column=fk_column),
+            )
+
+            if key in emitted:
+                continue
+
+            emitted.add(key)
+
+            row = self.empty_row()
+
+            row["Cobol Record IDMS"] = set_name
+            row["IDMS Key"] = "SET"
+            row["DB2 Key"] = "FK"
+            row["New DB2 Record"] = getattr(table, "name", "") or ""
+            row["New DB2 Field name"] = getattr(fk_column, "name", "") or ""
+            row["New DB2 Data Type"] = self.get_db2_datatype(
+                db2_column=fk_column,
+            )
+
+            rows.append(row)
+
+        return rows
+
+    def build_set_fk_rows_from_metadata_relationships(
+        self,
+        metadata: SchemaMetadata,
+        record,
+        member_table: DB2Table,
+        table_lookup: dict[str, DB2Table],
+        emitted: set[tuple[str, str, str, str]],
+    ) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+
+        current_record_name = getattr(record, "name", "") or ""
+        normalized_current_record = NameNormalizer.normalize(current_record_name)
+        normalized_current_table = NameNormalizer.normalize(
+            getattr(member_table, "name", "") or ""
+        )
+
+        for relationship in getattr(metadata, "relationships", []) or []:
+            set_name = self.get_relationship_set_name(
+                relationship=relationship,
+            )
+
+            owner_record_name = self.get_relationship_owner_record(
+                relationship=relationship,
+            )
+
+            member_record_name = self.get_relationship_member_record(
+                relationship=relationship,
+            )
+
+            if not set_name or not owner_record_name or not member_record_name:
+                continue
+
+            normalized_member_record = NameNormalizer.normalize(member_record_name)
+
+            is_current_member = (
+                normalized_member_record == normalized_current_record
+                or normalized_member_record == normalized_current_table
+                or self.remove_record_suffix(normalized_member_record)
+                == self.remove_record_suffix(normalized_current_record)
+                or self.remove_record_suffix(normalized_member_record)
+                == self.remove_record_suffix(normalized_current_table)
+            )
+
+            if not is_current_member:
+                continue
+
+            owner_table = self.find_table_for_record(
+                record_name=owner_record_name,
+                table_lookup=table_lookup,
+            )
+
+            if owner_table is None:
+                continue
+
+            owner_pk_columns = self.get_primary_key_columns(
+                table=owner_table,
+            )
+
+            if not owner_pk_columns:
+                continue
+
+            for owner_pk_column in owner_pk_columns:
+                fk_column = self.find_existing_fk_column_for_set(
+                    member_table=member_table,
+                    set_name=set_name,
+                    owner_pk_column=owner_pk_column,
+                )
+
+                if fk_column is not None:
+                    fk_column_name = getattr(fk_column, "name", "") or ""
+                    fk_datatype = self.get_db2_datatype(db2_column=fk_column)
+                else:
+                    fk_column_name = self.generated_set_fk_column_name(
+                        set_name=set_name,
+                        owner_pk_column_name=getattr(owner_pk_column, "name", "") or "",
+                    )
+                    fk_datatype = self.get_db2_datatype(db2_column=owner_pk_column)
+
+                key = (
+                    NameNormalizer.normalize(set_name),
+                    NameNormalizer.normalize(getattr(member_table, "name", "") or ""),
+                    NameNormalizer.normalize(fk_column_name),
+                    fk_datatype,
+                )
+
+                if key in emitted:
+                    continue
+
+                emitted.add(key)
+
+                row = self.empty_row()
+
+                row["Cobol Record IDMS"] = set_name
+                row["IDMS Key"] = "SET"
+                row["DB2 Key"] = "FK"
+                row["New DB2 Record"] = getattr(member_table, "name", "") or ""
+                row["New DB2 Field name"] = fk_column_name
+                row["New DB2 Data Type"] = fk_datatype
+
+                rows.append(row)
+
+        return rows
+
+    def find_existing_fk_column_for_set(
+        self,
+        member_table: DB2Table,
+        set_name: str,
+        owner_pk_column: DB2Column,
+    ) -> DB2Column | None:
+        expected_column_name = self.generated_set_fk_column_name(
+            set_name=set_name,
+            owner_pk_column_name=getattr(owner_pk_column, "name", "") or "",
+        )
+
+        for column in getattr(member_table, "columns", []) or []:
+            column_name = getattr(column, "name", "") or ""
+
+            if NameNormalizer.normalize(column_name) == NameNormalizer.normalize(expected_column_name):
+                return column
+
+        for foreign_key in getattr(member_table, "foreign_keys", []) or []:
+            fk_set_name = getattr(foreign_key, "set_name", "") or ""
+            fk_column_name = self.get_foreign_key_column_name(
+                foreign_key=foreign_key,
+            )
+
+            if set_name and fk_set_name:
+                if NameNormalizer.normalize(set_name) != NameNormalizer.normalize(fk_set_name):
+                    continue
+
+            for column in getattr(member_table, "columns", []) or []:
+                if NameNormalizer.normalize(getattr(column, "name", "") or "") == NameNormalizer.normalize(fk_column_name):
+                    return column
+
+        return None
+
+    def generated_set_fk_column_name(
+        self,
+        set_name: str,
+        owner_pk_column_name: str,
+    ) -> str:
+        return self.to_db2_name(
+            f"{set_name}_{owner_pk_column_name}"
+        )
+
+    def get_primary_key_columns(
+        self,
+        table: DB2Table,
+    ) -> list[DB2Column]:
+        primary_key_names = list(getattr(table, "primary_keys", []) or [])
+
+        if not primary_key_names and getattr(table, "primary_key", None):
+            primary_key_names = [table.primary_key]
+
+        if not primary_key_names:
+            primary_key_names = [
+                getattr(column, "name", "") or ""
+                for column in getattr(table, "columns", []) or []
+                if getattr(column, "primary_key", False)
+            ]
+
+        result: list[DB2Column] = []
+
+        for primary_key_name in primary_key_names:
+            column = self.find_column_by_name(
+                table=table,
+                column_name=primary_key_name,
+            )
+
+            if column is not None:
+                result.append(column)
+
+        return result
+
+    def find_column_by_name(
+        self,
+        table: DB2Table,
+        column_name: str,
+    ) -> DB2Column | None:
+        normalized_column_name = NameNormalizer.normalize(column_name or "")
+
+        if not normalized_column_name:
+            return None
+
+        for column in getattr(table, "columns", []) or []:
+            current_name = NameNormalizer.normalize(getattr(column, "name", "") or "")
+
+            if current_name == normalized_column_name:
+                return column
+
+            if self.remove_record_suffix(current_name) == self.remove_record_suffix(normalized_column_name):
+                return column
+
+        return None
 
     def find_column_for_field(
         self,
@@ -506,8 +631,11 @@ class ExcelSheetMappingService:
         date_group_info: dict[str, dict],
     ) -> DB2Column | None:
         field_name = NameNormalizer.normalize(
-            getattr(field, "name", ""),
+            getattr(field, "name", "") or ""
         )
+
+        if not field_name:
+            return None
 
         column = self.find_matching_column(
             field_name=field_name,
@@ -517,35 +645,186 @@ class ExcelSheetMappingService:
         if column is not None:
             return column
 
-        for info in date_group_info.values():
-            actual_outer_field = info.get("actual_outer_field")
+        parsed_date_part = self.parse_date_part(
+            field_name=field_name,
+        )
+
+        if parsed_date_part is not None:
+            date_key = parsed_date_part.get("date_key", "")
+
+            column = self.find_matching_column(
+                field_name=date_key,
+                column_lookup=column_lookup,
+            )
+
+            if column is not None:
+                return column
+
+        return None
+
+    def find_matching_column(
+        self,
+        field_name: str,
+        column_lookup: dict[str, DB2Column],
+    ) -> DB2Column | None:
+        normalized = NameNormalizer.normalize(field_name or "")
+
+        if normalized in column_lookup:
+            return column_lookup[normalized]
+
+        suffix_removed = self.remove_record_suffix(normalized)
+
+        if suffix_removed and suffix_removed in column_lookup:
+            return column_lookup[suffix_removed]
+
+        return None
+
+    def collect_date_group_info(
+        self,
+        fields,
+    ) -> dict[str, dict]:
+        date_group_info: dict[str, dict] = {}
+
+        for field in fields or []:
+            field_name = NameNormalizer.normalize(
+                getattr(field, "name", "") or ""
+            )
+
+            if not field_name:
+                continue
+
+            parsed = self.parse_date_part(
+                field_name=field_name,
+            )
+
+            if parsed is not None:
+                date_key = parsed["date_key"]
+                part = parsed["part"]
+
+                if date_key not in date_group_info:
+                    date_group_info[date_key] = {
+                        "parts": {},
+                        "actual_outer_field": None,
+                    }
+
+                date_group_info[date_key]["parts"][part] = field
+                continue
+
+            if self.looks_like_outer_date_field(field=field):
+                date_key = field_name
+
+                if date_key not in date_group_info:
+                    date_group_info[date_key] = {
+                        "parts": {},
+                        "actual_outer_field": field,
+                    }
+                else:
+                    date_group_info[date_key]["actual_outer_field"] = field
+
+        return date_group_info
+
+    def looks_like_outer_date_field(
+        self,
+        field,
+    ) -> bool:
+        field_name = NameNormalizer.normalize(
+            getattr(field, "name", "") or ""
+        )
+
+        if not field_name:
+            return False
+
+        if not field_name.endswith("_DATE") and "DATE" not in field_name.split("_"):
+            return False
+
+        length = self.get_field_length(field=field)
+
+        try:
+            if int(length) == 8:
+                return True
+        except Exception:
+            pass
+
+        datatype = str(
+            getattr(field, "datatype", "") or ""
+        ).upper()
+
+        basetype = str(
+            getattr(field, "basetype", "") or ""
+        ).upper()
+
+        return datatype == "DATE" or basetype == "DATE"
+
+    def is_actual_outer_date_field(
+        self,
+        field,
+        date_group_info: dict[str, dict],
+    ) -> bool:
+        field_name = NameNormalizer.normalize(
+            getattr(field, "name", "") or ""
+        )
+
+        if not field_name:
+            return False
+
+        for _date_key, group_info in date_group_info.items():
+            actual_outer_field = group_info.get("actual_outer_field")
 
             if actual_outer_field is None:
                 continue
 
-            if not self.same_column_name(
-                field_name,
-                getattr(actual_outer_field, "name", ""),
-            ):
-                continue
-
-            return self.find_first_matching_column(
-                candidate_names=info.get("candidate_names", []),
-                column_lookup=column_lookup,
+            actual_outer_name = NameNormalizer.normalize(
+                getattr(actual_outer_field, "name", "") or ""
             )
 
-        return None
+            if actual_outer_name == field_name:
+                return True
+
+            if self.remove_record_suffix(actual_outer_name) == self.remove_record_suffix(field_name):
+                return True
+
+        return False
+
+    def inferred_date_key_for_date_part(
+        self,
+        field_name: str,
+    ) -> str | None:
+        candidates = self.parse_date_part_candidates(
+            field_name=field_name,
+        )
+
+        if not candidates:
+            return None
+
+        return candidates[0]["date_key"]
+
+    def parse_date_part(
+        self,
+        field_name: str,
+    ) -> dict | None:
+        candidates = self.parse_date_part_candidates(
+            field_name=field_name,
+        )
+
+        if not candidates:
+            return None
+
+        return candidates[0]
 
     def parse_date_part_candidates(
         self,
         field_name: str,
     ) -> list[dict]:
-        tokens = self.split_name_tokens(
-            field_name,
-        )
+        normalized = NameNormalizer.normalize(field_name or "")
 
-        if len(tokens) < 2:
+        if not normalized:
             return []
+
+        tokens = [
+            token
+            for token in normalized.split("_")
+            if token
+        ]
 
         candidates = []
 
@@ -558,32 +837,14 @@ class ExcelSheetMappingService:
             if part is None:
                 continue
 
-            base_tokens = tokens[:index] + tokens[index + 1 :]
-
-            if not base_tokens:
-                continue
-
             date_tokens = tokens.copy()
             date_tokens[index] = "DATE"
 
-            base_name = " ".join(
-                base_tokens,
-            )
-
-            date_name = " ".join(
-                date_tokens,
-            )
-
             candidates.append(
                 {
-                    "date_key": NameNormalizer.normalize(base_name),
+                    "date_key": "_".join(date_tokens),
                     "part": part,
-                    "candidate_names": self.unique_values(
-                        [
-                            base_name,
-                            date_name,
-                        ]
-                    ),
+                    "tokens": date_tokens,
                 }
             )
 
@@ -619,136 +880,402 @@ class ExcelSheetMappingService:
 
         return None
 
-    def inferred_date_key_for_date_part(
+    def db2_key_label(
         self,
-        field_name: str,
-    ) -> str | None:
-        candidates = self.parse_date_part_candidates(
-            field_name=field_name,
-        )
+        table: DB2Table | None,
+        column: DB2Column | None,
+    ) -> str:
+        if table is None or column is None:
+            return ""
 
-        if not candidates:
-            return None
+        labels = []
 
-        return candidates[0]["date_key"]
+        if self.is_primary_key_column(
+            table=table,
+            column=column,
+        ):
+            labels.append("PK")
 
-    def has_complete_date_group(
+        if self.is_foreign_key_column(
+            table=table,
+            column=column,
+        ):
+            labels.append("FK")
+
+        return "/".join(labels)
+
+    def idms_key_label(
         self,
-        parts: dict,
+        record,
+        field,
+        db2_key: str,
+    ) -> str:
+        labels = []
+
+        if self.is_calc_key_field(
+            record=record,
+            field=field,
+        ):
+            labels.append("CALC")
+
+        if "FK" in [
+            part.strip().upper()
+            for part in str(db2_key or "").split("/")
+            if part.strip()
+        ]:
+            labels.append("SET")
+
+        return "; ".join(labels)
+
+    def is_calc_key_field(
+        self,
+        record,
+        field,
     ) -> bool:
+        primary_keys = []
+
+        explicit_primary_keys = getattr(record, "primary_keys", None)
+
+        if explicit_primary_keys:
+            if isinstance(explicit_primary_keys, list):
+                primary_keys.extend(explicit_primary_keys)
+            else:
+                primary_keys.append(explicit_primary_keys)
+
+        primary_key = getattr(record, "primary_key", None)
+
+        if primary_key:
+            primary_keys.append(primary_key)
+
+        field_name = getattr(field, "name", None)
+
+        if not primary_keys or not field_name:
+            return False
+
+        field_normalized = NameNormalizer.normalize(field_name)
+
+        for primary_key_value in primary_keys:
+            primary_key_normalized = NameNormalizer.normalize(primary_key_value)
+
+            if primary_key_normalized == field_normalized:
+                return True
+
+            if self.remove_record_suffix(primary_key_normalized) == self.remove_record_suffix(field_normalized):
+                return True
+
+        return False
+
+    def is_primary_key_column(
+        self,
+        table: DB2Table,
+        column: DB2Column,
+    ) -> bool:
+        if getattr(column, "primary_key", False):
+            return True
+
+        column_name = NameNormalizer.normalize(
+            getattr(column, "name", "") or ""
+        )
+
+        primary_keys = list(
+            getattr(table, "primary_keys", []) or []
+        )
+
+        if not primary_keys and getattr(table, "primary_key", None):
+            primary_keys = [table.primary_key]
+
+        normalized_primary_keys = {
+            NameNormalizer.normalize(primary_key)
+            for primary_key in primary_keys
+            if primary_key
+        }
+
+        return column_name in normalized_primary_keys
+
+    def is_foreign_key_column(
+        self,
+        table: DB2Table,
+        column: DB2Column,
+    ) -> bool:
+        column_name = NameNormalizer.normalize(
+            getattr(column, "name", "") or ""
+        )
+
+        for foreign_key in getattr(table, "foreign_keys", []) or []:
+            foreign_key_column_name = NameNormalizer.normalize(
+                self.get_foreign_key_column_name(
+                    foreign_key=foreign_key,
+                )
+            )
+
+            if column_name == foreign_key_column_name:
+                return True
+
+        return False
+
+    def get_foreign_key_column_name(
+        self,
+        foreign_key,
+    ) -> str:
         return (
-            "YEAR" in parts
-            and "MONTH" in parts
-            and "DAY" in parts
+            getattr(foreign_key, "column_name", None)
+            or getattr(foreign_key, "child_column", None)
+            or getattr(foreign_key, "child_fk", None)
+            or getattr(foreign_key, "foreign_key", None)
+            or ""
         )
 
-    def inferred_parent_level(
+    def get_relationship_set_name(
         self,
-        parts: dict,
-    ) -> int | None:
-        first_part_field = (
-            parts.get("YEAR")
-            or parts.get("MONTH")
-            or parts.get("DAY")
+        relationship,
+    ) -> str:
+        return (
+            getattr(relationship, "set_name", None)
+            or getattr(relationship, "name", None)
+            or getattr(relationship, "set", None)
+            or ""
         )
 
-        level = getattr(
-            first_part_field,
-            "level",
-            None,
+    def get_relationship_owner_record(
+        self,
+        relationship,
+    ) -> str:
+        return (
+            getattr(relationship, "owner_record", None)
+            or getattr(relationship, "parent_record", None)
+            or getattr(relationship, "owner", None)
+            or getattr(relationship, "parent", None)
+            or ""
         )
 
-        if level is None:
-            return None
+    def get_relationship_member_record(
+        self,
+        relationship,
+    ) -> str:
+        return (
+            getattr(relationship, "member_record", None)
+            or getattr(relationship, "child_record", None)
+            or getattr(relationship, "member", None)
+            or getattr(relationship, "child", None)
+            or ""
+        )
 
-        try:
-            return max(
-                int(level) - 1,
-                1,
+    def build_table_lookup(
+        self,
+        db2_model: DB2Model,
+    ) -> dict[str, DB2Table]:
+        lookup: dict[str, DB2Table] = {}
+
+        if db2_model is None:
+            return lookup
+
+        for table in getattr(db2_model, "tables", []) or []:
+            table_name = getattr(table, "name", "") or ""
+            normalized_table_name = NameNormalizer.normalize(table_name)
+
+            if normalized_table_name:
+                lookup[normalized_table_name] = table
+
+            suffix_removed = self.remove_record_suffix(normalized_table_name)
+
+            if suffix_removed:
+                lookup[suffix_removed] = table
+
+        return lookup
+
+    def build_column_lookup(
+        self,
+        table: DB2Table,
+    ) -> dict[str, DB2Column]:
+        lookup: dict[str, DB2Column] = {}
+
+        for column in getattr(table, "columns", []) or []:
+            column_name = getattr(column, "name", "") or ""
+            normalized_column_name = NameNormalizer.normalize(column_name)
+
+            if normalized_column_name:
+                lookup[normalized_column_name] = column
+
+            suffix_removed = self.remove_record_suffix(normalized_column_name)
+
+            if suffix_removed:
+                lookup[suffix_removed] = column
+
+        return lookup
+
+    def build_relationship_lookup(
+        self,
+        metadata: SchemaMetadata,
+    ) -> dict[str, str]:
+        lookup: dict[str, str] = {}
+
+        for relationship in getattr(metadata, "relationships", []) or []:
+            owner_record = self.get_relationship_owner_record(
+                relationship=relationship,
             )
 
-        except Exception:
-            return level
-
-    def find_first_matching_column(
-        self,
-        candidate_names: list[str],
-        column_lookup: dict[str, DB2Column],
-    ) -> DB2Column | None:
-        for candidate_name in candidate_names:
-            column = self.find_matching_column(
-                field_name=NameNormalizer.normalize(candidate_name),
-                column_lookup=column_lookup,
+            member_record = self.get_relationship_member_record(
+                relationship=relationship,
             )
 
-            if column is not None:
-                return column
+            set_name = self.get_relationship_set_name(
+                relationship=relationship,
+            )
+
+            for record_name in [owner_record, member_record]:
+                normalized_record = NameNormalizer.normalize(record_name)
+
+                if not normalized_record:
+                    continue
+
+                existing = lookup.get(normalized_record, "")
+
+                if existing:
+                    if set_name and set_name not in existing:
+                        lookup[normalized_record] = f"{existing}; {set_name}"
+                else:
+                    lookup[normalized_record] = set_name
+
+        return lookup
+
+    def find_table_for_record(
+        self,
+        record_name: str,
+        table_lookup: dict[str, DB2Table],
+    ) -> DB2Table | None:
+        normalized_record_name = NameNormalizer.normalize(record_name)
+
+        if normalized_record_name in table_lookup:
+            return table_lookup[normalized_record_name]
+
+        suffix_removed = self.remove_record_suffix(normalized_record_name)
+
+        if suffix_removed and suffix_removed in table_lookup:
+            return table_lookup[suffix_removed]
 
         return None
 
-    def best_display_date_name(
+    def is_filler_field(
         self,
-        candidate_names: list[str],
-        date_column: DB2Column,
-    ) -> str:
-        column_name = getattr(date_column, "name", "")
-
-        for candidate_name in candidate_names:
-            if self.same_column_name(
-                candidate_name,
-                column_name,
-            ):
-                return candidate_name
-
-        if candidate_names:
-            return candidate_names[0]
-
-        return column_name
-
-    def unique_values(
-        self,
-        values: list[str],
-    ) -> list[str]:
-        result = []
-        seen = set()
-
-        for value in values:
-            normalized = NameNormalizer.normalize(
-                value,
-            )
-
-            if not normalized:
-                continue
-
-            if normalized in seen:
-                continue
-
-            seen.add(
-                normalized,
-            )
-
-            result.append(
-                normalized,
-            )
-
-        return result
-
-    def is_date_part_name(
-        self,
-        field_name: str,
+        field,
     ) -> bool:
-        return bool(
-            self.parse_date_part_candidates(
-                field_name=field_name,
-            )
+        field_name = getattr(field, "name", "") or ""
+        return field_name.upper().startswith("FILLER")
+
+    def format_cobol_zone(
+        self,
+        field,
+    ) -> str:
+        level = getattr(field, "level", None)
+        name = getattr(field, "name", "") or ""
+
+        if level is None:
+            return name
+
+        return self.format_cobol_level_and_name(
+            level=level,
+            name=name,
         )
 
-    def to_cobol_name(
+    def format_cobol_level_and_name(
         self,
-        value: str,
+        level,
+        name,
     ) -> str:
-        return "-".join(
-            self.split_name_tokens(value),
+        if level is None:
+            return str(name or "")
+
+        try:
+            level_text = f"{int(level):02d}"
+        except Exception:
+            level_text = str(level)
+
+        return f"{level_text} {name}"
+
+    def get_field_picture(
+        self,
+        field,
+    ) -> str:
+        picture = (
+            getattr(field, "picture", None)
+            or getattr(field, "pic", None)
+            or getattr(field, "pic_clause", None)
+            or ""
+        )
+
+        if not picture:
+            return ""
+
+        text = str(picture).strip()
+
+        if text.upper().startswith("PIC"):
+            return text
+
+        return f"PIC {text}"
+
+    def get_field_length(
+        self,
+        field,
+    ):
+        return (
+            getattr(field, "length", None)
+            or getattr(field, "storage_length", None)
+            or getattr(field, "physical_length", None)
+            or ""
+        )
+
+    def get_field_end_position(
+        self,
+        field,
+    ):
+        end_position = (
+            getattr(field, "end_position", None)
+            or getattr(field, "field_end_position", None)
+            or None
+        )
+
+        if end_position is not None:
+            return end_position
+
+        start = (
+            getattr(field, "start_position", None)
+            or getattr(field, "start", None)
+            or None
+        )
+
+        length = self.get_field_length(field=field)
+
+        try:
+            if start is not None and length not in ("", None):
+                return int(start) + int(length) - 1
+        except Exception:
+            return ""
+
+        return ""
+
+    def get_field_basetype(
+        self,
+        field,
+    ) -> str:
+        return str(
+            getattr(field, "basetype", None)
+            or getattr(field, "base_type", None)
+            or getattr(field, "datatype", None)
+            or ""
+        )
+
+    def get_db2_datatype(
+        self,
+        db2_column: DB2Column | None,
+    ) -> str:
+        if db2_column is None:
+            return ""
+
+        return str(
+            getattr(db2_column, "datatype", None)
+            or getattr(db2_column, "data_type", None)
+            or getattr(db2_column, "type", None)
+            or ""
         )
 
     def hopex_remark(
@@ -775,434 +1302,6 @@ class ExcelSheetMappingService:
             for column in self.COLUMNS
         }
 
-    def build_table_lookup(
-        self,
-        db2_model: DB2Model,
-    ) -> dict[str, DB2Table]:
-        lookup = {}
-
-        if db2_model is None:
-            return lookup
-
-        for table in getattr(db2_model, "tables", []) or []:
-            normalized_table_name = NameNormalizer.normalize(
-                table.name,
-            )
-
-            if normalized_table_name:
-                lookup[normalized_table_name] = table
-
-            suffix_removed_table_name = self.remove_record_suffix(
-                normalized_table_name,
-            )
-
-            if suffix_removed_table_name:
-                lookup[suffix_removed_table_name] = table
-
-        return lookup
-
-    def build_column_lookup(
-        self,
-        table: DB2Table,
-    ) -> dict[str, DB2Column]:
-        lookup = {}
-
-        for column in getattr(table, "columns", []) or []:
-            normalized_column_name = NameNormalizer.normalize(
-                column.name,
-            )
-
-            if normalized_column_name:
-                lookup[normalized_column_name] = column
-
-            suffix_removed_name = self.remove_record_suffix(
-                normalized_column_name,
-            )
-
-            if suffix_removed_name:
-                lookup[suffix_removed_name] = column
-
-        return lookup
-
-    def build_relationship_lookup(
-        self,
-        metadata: SchemaMetadata,
-    ) -> dict[str, str]:
-        lookup = {}
-
-        for record in getattr(metadata, "records", []) or []:
-            record_name = NameNormalizer.normalize(
-                getattr(record, "name", None),
-            )
-
-            if not record_name:
-                continue
-
-            relation_parts = []
-
-            for membership in getattr(record, "set_memberships", []) or []:
-                relation_text = self.build_membership_relation_text(
-                    membership=membership,
-                )
-
-                if relation_text:
-                    relation_parts.append(
-                        relation_text,
-                    )
-
-            if relation_parts:
-                lookup[record_name] = "; ".join(
-                    relation_parts,
-                )
-
-        return lookup
-
-    def build_membership_relation_text(
-        self,
-        membership,
-    ) -> str:
-        relation_type = (
-            getattr(membership, "relation_type", None)
-            or getattr(membership, "role", None)
-            or getattr(membership, "type", None)
-            or ""
-        )
-
-        set_name = (
-            getattr(membership, "set_name", None)
-            or getattr(membership, "name", None)
-            or ""
-        )
-
-        owner_record = (
-            getattr(membership, "owner_record", None)
-            or getattr(membership, "owner", None)
-            or ""
-        )
-
-        member_record = (
-            getattr(membership, "member_record", None)
-            or getattr(membership, "member", None)
-            or ""
-        )
-
-        relation_type = str(relation_type).upper()
-        set_name = str(set_name)
-        owner_record = str(owner_record)
-        member_record = str(member_record)
-
-        if not set_name:
-            return ""
-
-        if relation_type == "OWNER":
-            if member_record:
-                return f"OWNER: {set_name} -> {member_record}"
-
-            return f"OWNER: {set_name}"
-
-        if relation_type == "MEMBER":
-            if owner_record:
-                return f"MEMBER: {set_name} <- {owner_record}"
-
-            return f"MEMBER: {set_name}"
-
-        if owner_record and member_record:
-            return f"{relation_type}: {set_name}: {owner_record} -> {member_record}".strip(": ")
-
-        if owner_record:
-            return f"{relation_type}: {set_name} <- {owner_record}".strip(": ")
-
-        if member_record:
-            return f"{relation_type}: {set_name} -> {member_record}".strip(": ")
-
-        return f"{relation_type}: {set_name}".strip(": ")
-
-    def find_matching_column(
-        self,
-        field_name: str,
-        column_lookup: dict[str, DB2Column],
-    ) -> DB2Column | None:
-        if field_name in column_lookup:
-            return column_lookup[field_name]
-
-        suffix_removed = self.remove_record_suffix(
-            field_name,
-        )
-
-        if suffix_removed in column_lookup:
-            return column_lookup[suffix_removed]
-
-        return None
-
-    def build_cobol_zone_value(
-        self,
-        record,
-        field,
-        db2_column: DB2Column | None,
-    ) -> str:
-        field_name = getattr(field, "name", "") or ""
-
-        if not field_name:
-            return getattr(record, "cobol_zone", "") or ""
-
-        field_level = getattr(field, "level", None)
-
-        if field_level is not None:
-            return self.format_cobol_level_and_name(
-                level=field_level,
-                name=field_name,
-            )
-
-        return field_name
-
-    def idms_key_label(
-        self,
-        record,
-        field,
-        db2_key: str,
-    ) -> str:
-        labels = []
-
-        if self.is_calc_key_field(record=record, field=field):
-            labels.append("CALC")
-
-        if self.db2_key_contains_fk(db2_key=db2_key):
-            labels.append("SET")
-
-        return "; ".join(labels)
-
-    def db2_key_contains_fk(
-        self,
-        db2_key: str,
-    ) -> bool:
-        parts = [
-            part.strip().upper()
-            for part in str(db2_key or "").split("/")
-            if part.strip()
-        ]
-
-        return "FK" in parts
-
-    def is_calc_key_field(
-        self,
-        record,
-        field,
-    ) -> bool:
-        primary_key = getattr(record, "primary_key", None)
-        field_name = getattr(field, "name", None)
-
-        if not primary_key or not field_name:
-            return False
-
-        return self.same_column_name(
-            left=primary_key,
-            right=field_name,
-        )
-
-    def db2_key_label(
-        self,
-        table: DB2Table | None,
-        column: DB2Column | None,
-    ) -> str:
-        if table is None or column is None:
-            return ""
-
-        labels = []
-
-        if self.is_primary_key_column(table=table, column=column):
-            labels.append("PK")
-
-        if self.is_foreign_key_column(table=table, column=column):
-            labels.append("FK")
-
-        return "/".join(labels)
-
-    def is_primary_key_column(
-        self,
-        table: DB2Table,
-        column: DB2Column,
-    ) -> bool:
-        if getattr(column, "primary_key", False):
-            return True
-
-        table_primary_key = getattr(table, "primary_key", None)
-
-        if not table_primary_key:
-            return False
-
-        return self.same_column_name(
-            left=table_primary_key,
-            right=column.name,
-        )
-
-    def is_foreign_key_column(
-        self,
-        table: DB2Table,
-        column: DB2Column,
-    ) -> bool:
-        column_name = getattr(column, "name", None)
-
-        if not column_name:
-            return False
-
-        for foreign_key in getattr(table, "foreign_keys", []) or []:
-            foreign_key_column_name = self.get_foreign_key_column_name(
-                foreign_key=foreign_key,
-            )
-
-            if self.same_column_name(
-                left=foreign_key_column_name,
-                right=column_name,
-            ):
-                return True
-
-        return False
-
-    def get_foreign_key_column_name(
-        self,
-        foreign_key,
-    ) -> str:
-        return (
-            getattr(foreign_key, "column_name", None)
-            or getattr(foreign_key, "child_column", None)
-            or getattr(foreign_key, "child_fk", None)
-            or getattr(foreign_key, "foreign_key", None)
-            or getattr(foreign_key, "column", None)
-            or ""
-        )
-
-    def same_column_name(
-        self,
-        left: str | None,
-        right: str | None,
-    ) -> bool:
-        if not left or not right:
-            return False
-
-        normalized_left = NameNormalizer.normalize(left)
-        normalized_right = NameNormalizer.normalize(right)
-
-        if normalized_left == normalized_right:
-            return True
-
-        return self.remove_record_suffix(normalized_left) == self.remove_record_suffix(normalized_right)
-
-    def format_cobol_level_and_name(
-        self,
-        level: int | str | None,
-        name: str,
-    ) -> str:
-        if level is None:
-            return name or ""
-
-        try:
-            level_value = int(level)
-            return f"{level_value:02d} {name}".strip()
-
-        except Exception:
-            return f"{level} {name}".strip()
-
-    def split_name_tokens(
-        self,
-        value: str,
-    ) -> list[str]:
-        normalized = NameNormalizer.normalize(value)
-
-        return [
-            token
-            for token in re.split(r"[\s_-]+", normalized)
-            if token
-        ]
-
-    def remove_record_suffix(
-        self,
-        value: str,
-    ) -> str:
-        normalized = NameNormalizer.normalize(value)
-        tokens = self.split_name_tokens(normalized)
-
-        if (
-            len(tokens) > 1
-            and tokens[-1].isdigit()
-            and len(tokens[-1]) == 4
-        ):
-            return " ".join(tokens[:-1])
-
-        return normalized
-
-    def get_field_picture(
-        self,
-        field,
-    ) -> str:
-        return (
-            getattr(field, "picture", None)
-            or getattr(field, "pic_clause", None)
-            or getattr(field, "pic", None)
-            or ""
-        )
-
-    def get_field_length(
-        self,
-        field,
-    ):
-        return (
-            getattr(field, "length", None)
-            or getattr(field, "byte_length", None)
-            or getattr(field, "field_length", None)
-            or ""
-        )
-
-    def get_field_end_position(
-        self,
-        field,
-    ):
-        return (
-            getattr(field, "end_position", None)
-            or getattr(field, "field_end_position", None)
-            or getattr(field, "end", None)
-            or ""
-        )
-
-    def get_field_basetype(
-        self,
-        field,
-    ) -> str:
-        basetype = (
-            getattr(field, "basetype", None)
-            or getattr(field, "base_type", None)
-            or ""
-        )
-
-        if basetype:
-            return str(basetype)
-
-        picture = self.get_field_picture(field=field)
-        picture_upper = str(picture).upper()
-
-        if "X" in picture_upper:
-            return "TEXT"
-
-        if "9" in picture_upper or "V" in picture_upper:
-            return "NUMERIC"
-
-        return ""
-
-    def get_db2_datatype(
-        self,
-        db2_column: DB2Column | None,
-    ) -> str:
-        if db2_column is None:
-            return ""
-
-        datatype = (
-            getattr(db2_column, "datatype", None)
-            or getattr(db2_column, "data_type", None)
-            or getattr(db2_column, "type", None)
-            or ""
-        )
-
-        return str(datatype)
-
     def to_string(
         self,
         value,
@@ -1211,3 +1310,29 @@ class ExcelSheetMappingService:
             return ""
 
         return str(value)
+
+    def to_db2_name(
+        self,
+        value,
+    ) -> str:
+        text = str(value or "").strip().upper()
+        text = text.replace("-", "_")
+        text = text.replace(" ", "_")
+        text = re.sub(r"[^A-Z0-9_]", "_", text)
+        text = re.sub(r"_+", "_", text)
+        return text.strip("_")
+
+    def remove_record_suffix(
+        self,
+        value: str,
+    ) -> str:
+        text = NameNormalizer.normalize(value or "")
+
+        if not text:
+            return ""
+
+        return re.sub(
+            r"_[0-9]{4}$",
+            "",
+            text,
+        )
