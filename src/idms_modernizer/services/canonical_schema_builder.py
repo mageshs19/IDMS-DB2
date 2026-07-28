@@ -1,3 +1,5 @@
+import re
+
 from idms_modernizer.domain.canonical_models import (
     CanonicalSchema,
     CanonicalRecord,
@@ -22,15 +24,16 @@ class CanonicalSchemaBuilder:
     - No hardcoded column names.
     - No hardcoded SET names.
 
-    Rules:
-    - Use physical record.fields for DDL-safe columns.
-    - Use record.mapping_fields only to understand group / subgroup structure.
-    - Skip inner date parts.
+    DDL rules:
+    - Use record.fields for physical / DDL-safe fields.
+    - Use record.mapping_fields only to understand group hierarchy.
+    - Skip date child parts from physical DB2 columns.
     - Consolidate complete date parts into one DATE column.
-    - Skip non-date group wrappers.
-    - If CALC primary key references a group, expand it to child physical fields.
-    - If no CALC exists, DB2MappingService generates ID_RECORD_<record_name> CHAR(20).
-    - Preserve SET owner/member relationships.
+    - Skip non-date group wrappers as DB2 columns.
+    - If CALC points to a group, expand only non-date physical child fields as composite PK.
+    - If CALC group contains date groups or date parts, they remain visible in Sheet Mapping but are not PK.
+    - If no CALC exists, DB2MappingService creates ID_RECORD_<record_name> CHAR(20).
+    - Preserve SET owner/member relationships for FK generation.
     """
 
     def build(
@@ -40,17 +43,21 @@ class CanonicalSchemaBuilder:
         schema = CanonicalSchema()
 
         for record in getattr(metadata, "records", []) or []:
+            record_name = NameNormalizer.normalize(
+                getattr(record, "name", "") or "",
+            )
+
+            primary_key = (
+                NameNormalizer.normalize(
+                    getattr(record, "primary_key", "") or "",
+                )
+                if getattr(record, "primary_key", None)
+                else None
+            )
+
             canonical_record = CanonicalRecord(
-                name=NameNormalizer.normalize(
-                    getattr(record, "name", "") or "",
-                ),
-                primary_key=(
-                    NameNormalizer.normalize(
-                        getattr(record, "primary_key", "") or "",
-                    )
-                    if getattr(record, "primary_key", None)
-                    else None
-                ),
+                name=record_name,
+                primary_key=primary_key,
                 primary_keys=[],
             )
 
@@ -70,13 +77,17 @@ class CanonicalSchemaBuilder:
                 if not field_name:
                     continue
 
-                if self.is_date_part_name(field_name=field_name):
+                if self.is_date_part_name(
+                    field_name=field_name,
+                ):
                     continue
 
                 if field_name in added_fields:
                     continue
 
-                if self.is_non_physical_group_field(field=field):
+                if self.is_non_physical_group_field(
+                    field=field,
+                ):
                     continue
 
                 adjusted_field = self.adjust_occurs_field(
@@ -153,6 +164,16 @@ class CanonicalSchemaBuilder:
             if key_name in canonical_primary_keys:
                 continue
 
+            if self.is_date_part_name(
+                field_name=key_name,
+            ):
+                continue
+
+            if self.is_date_field(
+                field=key_field,
+            ):
+                continue
+
             canonical_primary_keys.append(key_name)
 
             if key_name in added_fields:
@@ -168,14 +189,12 @@ class CanonicalSchemaBuilder:
                 record=record,
             )
 
-            scale = getattr(key_field, "scale", None)
-
             canonical_record.fields.append(
                 CanonicalField(
                     name=key_name,
                     datatype=datatype,
                     length=length,
-                    scale=scale,
+                    scale=getattr(key_field, "scale", None),
                     occurs=False,
                     occurs_max=None,
                 )
@@ -209,6 +228,14 @@ class CanonicalSchemaBuilder:
 
             if child_fields:
                 return child_fields
+
+        if self.is_date_field(field=key_field):
+            return []
+
+        if self.is_date_part_name(
+            field_name=NameNormalizer.normalize(getattr(key_field, "name", "") or ""),
+        ):
+            return []
 
         return [key_field]
 
@@ -262,13 +289,16 @@ class CanonicalSchemaBuilder:
             if field_level_int <= group_level_int:
                 break
 
-            if self.is_non_physical_group_field(field=field):
+            if self.is_filler_field(field=field):
                 continue
 
             if self.is_date_part_name(field_name=field_name):
                 continue
 
-            if self.is_filler_field(field=field):
+            if self.is_date_field(field=field):
+                continue
+
+            if self.is_non_physical_group_field(field=field):
                 continue
 
             if not self.has_physical_definition(field=field):
@@ -299,6 +329,16 @@ class CanonicalSchemaBuilder:
         )
 
         if key_field is not None:
+            if self.is_date_field(field=key_field):
+                canonical_record.primary_keys = []
+                return
+
+            if self.is_date_part_name(
+                field_name=NameNormalizer.normalize(getattr(key_field, "name", "") or ""),
+            ):
+                canonical_record.primary_keys = []
+                return
+
             datatype = self.datatype_for_key_field(
                 key_field=key_field,
                 record=record,
@@ -358,7 +398,11 @@ class CanonicalSchemaBuilder:
         )
 
         for field in fields:
-            if NameNormalizer.normalize(getattr(field, "name", "") or "") == normalized_primary_key:
+            field_name = NameNormalizer.normalize(
+                getattr(field, "name", "") or "",
+            )
+
+            if field_name == normalized_primary_key:
                 return field
 
         suffix_removed_primary_key = self.remove_record_suffix(
@@ -366,11 +410,11 @@ class CanonicalSchemaBuilder:
         )
 
         for field in fields:
-            normalized_field_name = NameNormalizer.normalize(
+            field_name = NameNormalizer.normalize(
                 getattr(field, "name", "") or "",
             )
 
-            if self.remove_record_suffix(normalized_field_name) == suffix_removed_primary_key:
+            if self.remove_record_suffix(field_name) == suffix_removed_primary_key:
                 return field
 
         return None
@@ -469,6 +513,12 @@ class CanonicalSchemaBuilder:
             if self.is_non_physical_group_field(field=field):
                 continue
 
+            if self.is_date_part_name(field_name=field_name):
+                continue
+
+            if self.is_date_field(field=field):
+                continue
+
             length = getattr(field, "length", None)
 
             try:
@@ -517,10 +567,7 @@ class CanonicalSchemaBuilder:
         self,
         field,
     ) -> bool:
-        if getattr(field, "datatype", None) == "DATE":
-            return False
-
-        if getattr(field, "basetype", None) == "DATE":
+        if self.is_date_field(field=field):
             return False
 
         if getattr(field, "is_group", False):
@@ -558,6 +605,32 @@ class CanonicalSchemaBuilder:
 
         return False
 
+    def is_date_field(
+        self,
+        field,
+    ) -> bool:
+        datatype = str(
+            getattr(field, "datatype", "") or ""
+        ).upper()
+
+        basetype = str(
+            getattr(field, "basetype", "") or ""
+        ).upper()
+
+        field_name = NameNormalizer.normalize(
+            getattr(field, "name", "") or ""
+        )
+
+        normalized_name = field_name.replace(" ", "_")
+
+        return (
+            datatype == "DATE"
+            or basetype == "DATE"
+            or normalized_name.endswith("_DATE")
+            or normalized_name == "DATE"
+            or "_DATE_" in normalized_name
+        )
+
     def is_filler_field(
         self,
         field,
@@ -584,7 +657,7 @@ class CanonicalSchemaBuilder:
 
         normalized = normalized.replace(" ", "_")
 
-        return __import__("re").sub(
+        return re.sub(
             r"_[0-9]{4}$",
             "",
             normalized,

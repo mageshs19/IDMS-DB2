@@ -13,11 +13,11 @@ class CanonicalField(BaseModel):
 class CanonicalRecord(BaseModel):
     name: str
 
-    # Backward-compatible single primary key.
+    # Backward-compatible single PK.
     primary_key: str | None = None
 
-    # New composite primary key support.
-    # If CALC points to an outer/group field, child physical fields are stored here.
+    # Composite PK support.
+    # When CALC points to a group, physical child fields are stored here.
     primary_keys: list[str] = Field(default_factory=list)
 
     record_id: str | None = None

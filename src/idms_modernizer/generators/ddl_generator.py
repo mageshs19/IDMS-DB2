@@ -1,4 +1,14 @@
 class DDLGenerator:
+    """
+    Generates DB2 DDL.
+
+    Supports:
+    - Single primary key
+    - Composite primary key through table.primary_keys
+    - Multiple FK columns
+    - FK constraints emitted after CREATE TABLE
+    """
+
     def generate(
         self,
         db2_model,

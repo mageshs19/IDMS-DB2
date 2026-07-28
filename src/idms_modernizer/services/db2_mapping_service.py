@@ -20,9 +20,8 @@ class DB2MappingService:
     - No hardcoded table names.
     - No hardcoded column names.
     - No hardcoded SET names.
-    - Converts detected IDMS owner/member SETs into DB2 foreign keys.
     - Uses every owner PK column for FK columns.
-    - If owner has composite PK, every PK column becomes one FK column.
+    - Composite PK owner creates multiple FK columns in member.
     - If a record has no PK, creates ID_RECORD_<record_name> CHAR(20).
     """
 
