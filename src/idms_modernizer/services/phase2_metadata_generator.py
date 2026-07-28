@@ -677,7 +677,7 @@ class Phase2MetadataGenerator:
 
         tokens = [
             token
-            for token in normalized.split("_")
+            for token in re.split(r"[\s_]+", normalized)
             if token
         ]
 
@@ -741,18 +741,38 @@ class Phase2MetadataGenerator:
         self,
         relationships: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        return {
-            "relationships_available": bool(relationships),
-            "set_count": len(relationships),
-        }
+        navigation_intent: dict[str, Any] = {}
+
+        for relationship in relationships:
+            set_name = relationship.get("set_name") or ""
+
+            if not set_name:
+                continue
+
+            navigation_intent[set_name] = {
+                "access_pattern": "SET_NAVIGATION",
+                "parent_record": relationship.get("parent_record"),
+                "child_record": relationship.get("child_record"),
+                "parent_key": relationship.get("parent_key"),
+                "parent_keys": relationship.get("parent_keys") or [],
+                "child_fk": relationship.get("child_fk"),
+                "child_fks": relationship.get("child_fks") or [],
+                "order_by": relationship.get("order_by") or [],
+            }
+
+        return navigation_intent
 
     def build_output_semantics(
         self,
     ) -> dict[str, Any]:
         return {
+            "generated_by": "idms-db2-modernizer-phase1",
+            "usage": "IDMS retrieval COBOL to DB2 embedded SQL conversion",
+            "physical_types_source": "DB2_DDL",
+            "logical_mapping_source": "PHASE1_CANONICAL_METADATA",
             "db2_key_values": ["PK", "FK", "PK/FK"],
             "generated_primary_key_rule": "ID_RECORD_<record_name>",
-            "generated_primary_key_datatype": "DECIMAL(18)",
+            "generated_primary_key_datatype": "CHAR(20)",
             "foreign_key_rule": "Use SET relationship and owner primary key columns only.",
             "character_rule": "CHAR by default; VARCHAR only when length equals 100.",
             "numeric_rule": "Numeric COBOL PIC maps to DECIMAL.",
@@ -767,6 +787,9 @@ class Phase2MetadataGenerator:
         field_map: dict[str, dict[str, Any]],
     ) -> list[str]:
         messages: list[str] = []
+
+        if not getattr(canonical_schema, "records", []) or []:
+            messages.append("No canonical records found.")
 
         if not getattr(db2_model, "tables", []) or []:
             messages.append("No DB2 tables found.")
@@ -855,6 +878,8 @@ class Phase2MetadataGenerator:
 
         if not text:
             return ""
+
+        text = text.replace(" ", "_")
 
         return re.sub(
             r"_[0-9]{4}$",

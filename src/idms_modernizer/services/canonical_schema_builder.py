@@ -17,14 +17,20 @@ class CanonicalSchemaBuilder:
     """
     Builds canonical schema from IDMS metadata.
 
-    DDL rules:
-    - Use leaf fields by default.
+    Generic behavior only:
+    - No hardcoded record names.
+    - No hardcoded column names.
+    - No hardcoded SET names.
+
+    Rules:
+    - Use physical record.fields for DDL-safe columns.
+    - Use record.mapping_fields only to understand group / subgroup structure.
     - Skip inner date parts.
     - Consolidate complete date parts into one DATE column.
     - Skip non-date group wrappers.
-    - Add CALC group key columns when primary_key references a group.
-    - Ensure primary key column always exists.
-    - Flatten OCCURS fields using effective max length.
+    - If CALC primary key references a group, expand it to child physical fields.
+    - If no CALC exists, DB2MappingService generates ID_RECORD_<record_name> CHAR(20).
+    - Preserve SET owner/member relationships.
     """
 
     def build(
@@ -33,37 +39,22 @@ class CanonicalSchemaBuilder:
     ) -> CanonicalSchema:
         schema = CanonicalSchema()
 
-        for record in metadata.records:
-            print(
-                f"CanonicalBuilder Input: "
-                f"{record.name} "
-                f"PK={record.primary_key}"
-            )
-
+        for record in getattr(metadata, "records", []) or []:
             canonical_record = CanonicalRecord(
                 name=NameNormalizer.normalize(
-                    record.name,
+                    getattr(record, "name", "") or "",
                 ),
                 primary_key=(
                     NameNormalizer.normalize(
-                        record.primary_key,
+                        getattr(record, "primary_key", "") or "",
                     )
-                    if record.primary_key
+                    if getattr(record, "primary_key", None)
                     else None
                 ),
+                primary_keys=[],
             )
 
-            print(
-                f"CanonicalRecord Created: "
-                f"{canonical_record.name} "
-                f"PK={canonical_record.primary_key}"
-            )
-
-            physical_fields = getattr(
-                record,
-                "fields",
-                [],
-            ) or []
+            physical_fields = getattr(record, "fields", []) or []
 
             normalized_fields = DateFieldConsolidator.consolidate(
                 physical_fields,
@@ -73,23 +64,19 @@ class CanonicalSchemaBuilder:
 
             for field in normalized_fields:
                 field_name = NameNormalizer.normalize(
-                    field.name,
+                    getattr(field, "name", "") or "",
                 )
 
                 if not field_name:
                     continue
 
-                if self.is_date_part_name(
-                    field_name=field_name,
-                ):
+                if self.is_date_part_name(field_name=field_name):
                     continue
 
                 if field_name in added_fields:
                     continue
 
-                if self.is_non_physical_group_field(
-                    field=field,
-                ):
+                if self.is_non_physical_group_field(field=field):
                     continue
 
                 adjusted_field = self.adjust_occurs_field(
@@ -99,27 +86,23 @@ class CanonicalSchemaBuilder:
                 canonical_record.fields.append(
                     CanonicalField(
                         name=field_name,
-                        datatype=adjusted_field.datatype,
-                        length=adjusted_field.length,
-                        scale=adjusted_field.scale,
+                        datatype=getattr(adjusted_field, "datatype", None),
+                        length=getattr(adjusted_field, "length", None),
+                        scale=getattr(adjusted_field, "scale", None),
                         occurs=getattr(adjusted_field, "occurs", False),
                         occurs_max=getattr(adjusted_field, "occurs_max", None),
                     )
                 )
 
-                added_fields.add(
-                    field_name,
-                )
+                added_fields.add(field_name)
 
-            self.ensure_primary_key_column(
+            self.apply_primary_key_rules(
                 canonical_record=canonical_record,
                 record=record,
                 added_fields=added_fields,
             )
 
-            schema.records.append(
-                canonical_record,
-            )
+            schema.records.append(canonical_record)
 
         self.add_sets_and_relationships(
             schema=schema,
@@ -128,32 +111,172 @@ class CanonicalSchemaBuilder:
 
         return schema
 
-    def is_non_physical_group_field(
+    def apply_primary_key_rules(
         self,
-        field,
-    ) -> bool:
-        is_group = bool(
-            getattr(field, "is_group", False)
-            or getattr(field, "has_child", False)
+        canonical_record: CanonicalRecord,
+        record,
+        added_fields: set[str],
+    ) -> None:
+        primary_key = canonical_record.primary_key
+
+        if not primary_key:
+            canonical_record.primary_keys = []
+            return
+
+        primary_key_fields = self.resolve_primary_key_fields(
+            record=record,
+            primary_key=primary_key,
         )
 
-        if not is_group:
-            return False
+        if not primary_key_fields:
+            self.ensure_primary_key_column(
+                canonical_record=canonical_record,
+                record=record,
+                added_fields=added_fields,
+            )
 
-        datatype = (
-            getattr(field, "datatype", None)
-            or ""
-        ).upper()
+            if canonical_record.primary_key:
+                canonical_record.primary_keys = [canonical_record.primary_key]
 
-        basetype = (
-            getattr(field, "basetype", None)
-            or ""
-        ).upper()
+            return
 
-        if datatype == "DATE" or basetype == "DATE":
-            return False
+        canonical_primary_keys: list[str] = []
 
-        return True
+        for key_field in primary_key_fields:
+            key_name = NameNormalizer.normalize(
+                getattr(key_field, "name", "") or "",
+            )
+
+            if not key_name:
+                continue
+
+            if key_name in canonical_primary_keys:
+                continue
+
+            canonical_primary_keys.append(key_name)
+
+            if key_name in added_fields:
+                continue
+
+            datatype = self.datatype_for_key_field(
+                key_field=key_field,
+                record=record,
+            )
+
+            length = self.length_for_key_field(
+                key_field=key_field,
+                record=record,
+            )
+
+            scale = getattr(key_field, "scale", None)
+
+            canonical_record.fields.append(
+                CanonicalField(
+                    name=key_name,
+                    datatype=datatype,
+                    length=length,
+                    scale=scale,
+                    occurs=False,
+                    occurs_max=None,
+                )
+            )
+
+            added_fields.add(key_name)
+
+        canonical_record.primary_keys = canonical_primary_keys
+
+        if canonical_primary_keys:
+            canonical_record.primary_key = canonical_primary_keys[0]
+
+    def resolve_primary_key_fields(
+        self,
+        record,
+        primary_key: str,
+    ) -> list:
+        key_field = self.find_field_for_primary_key(
+            record=record,
+            primary_key=primary_key,
+        )
+
+        if key_field is None:
+            return []
+
+        if self.is_group_like_field(field=key_field):
+            child_fields = self.child_physical_fields_for_group(
+                record=record,
+                group_field=key_field,
+            )
+
+            if child_fields:
+                return child_fields
+
+        return [key_field]
+
+    def child_physical_fields_for_group(
+        self,
+        record,
+        group_field,
+    ) -> list:
+        fields = getattr(record, "mapping_fields", []) or []
+
+        if not fields:
+            return []
+
+        group_name = NameNormalizer.normalize(
+            getattr(group_field, "name", "") or "",
+        )
+
+        group_level = getattr(group_field, "level", None)
+
+        if group_level is None:
+            return []
+
+        try:
+            group_level_int = int(group_level)
+        except Exception:
+            return []
+
+        collecting = False
+        children = []
+
+        for field in fields:
+            field_name = NameNormalizer.normalize(
+                getattr(field, "name", "") or "",
+            )
+
+            field_level = getattr(field, "level", None)
+
+            if field_level is None:
+                continue
+
+            try:
+                field_level_int = int(field_level)
+            except Exception:
+                continue
+
+            if not collecting:
+                if field_name == group_name:
+                    collecting = True
+                continue
+
+            if field_level_int <= group_level_int:
+                break
+
+            if self.is_non_physical_group_field(field=field):
+                continue
+
+            if self.is_date_part_name(field_name=field_name):
+                continue
+
+            if self.is_filler_field(field=field):
+                continue
+
+            if not self.has_physical_definition(field=field):
+                continue
+
+            children.append(field)
+
+        return children
 
     def ensure_primary_key_column(
         self,
@@ -167,6 +290,7 @@ class CanonicalSchemaBuilder:
             return
 
         if primary_key in added_fields:
+            canonical_record.primary_keys = [primary_key]
             return
 
         key_field = self.find_field_for_primary_key(
@@ -190,32 +314,29 @@ class CanonicalSchemaBuilder:
                     name=primary_key,
                     datatype=datatype,
                     length=length,
-                    scale=None,
+                    scale=getattr(key_field, "scale", None),
                     occurs=False,
                     occurs_max=None,
                 )
             )
 
-            added_fields.add(
-                primary_key,
-            )
-
+            added_fields.add(primary_key)
+            canonical_record.primary_keys = [primary_key]
             return
 
         canonical_record.fields.append(
             CanonicalField(
                 name=primary_key,
-                datatype="VARCHAR",
-                length=255,
+                datatype="CHAR",
+                length=20,
                 scale=None,
                 occurs=False,
                 occurs_max=None,
             )
         )
 
-        added_fields.add(
-            primary_key,
-        )
+        added_fields.add(primary_key)
+        canonical_record.primary_keys = [primary_key]
 
     def find_field_for_primary_key(
         self,
@@ -232,20 +353,24 @@ class CanonicalSchemaBuilder:
             getattr(record, "mapping_fields", []) or []
         )
 
-        for field in fields:
-            if NameNormalizer.normalize(field.name) == primary_key:
-                return field
-
-        suffix_removed_primary_key = self.remove_record_suffix(
+        normalized_primary_key = NameNormalizer.normalize(
             primary_key,
         )
 
         for field in fields:
-            field_name = NameNormalizer.normalize(
-                field.name,
+            if NameNormalizer.normalize(getattr(field, "name", "") or "") == normalized_primary_key:
+                return field
+
+        suffix_removed_primary_key = self.remove_record_suffix(
+            normalized_primary_key,
+        )
+
+        for field in fields:
+            normalized_field_name = NameNormalizer.normalize(
+                getattr(field, "name", "") or "",
             )
 
-            if self.remove_record_suffix(field_name) == suffix_removed_primary_key:
+            if self.remove_record_suffix(normalized_field_name) == suffix_removed_primary_key:
                 return field
 
         return None
@@ -255,224 +380,191 @@ class CanonicalSchemaBuilder:
         key_field,
         record,
     ) -> str:
-        datatype = (
-            getattr(
-                key_field,
-                "datatype",
-                None,
-            )
-            or ""
-        ).upper()
+        datatype = getattr(key_field, "datatype", None)
 
         if datatype:
             return datatype
 
-        if (
-            getattr(key_field, "is_group", False)
-            or getattr(key_field, "has_child", False)
-        ):
-            return "VARCHAR"
+        picture = str(
+            getattr(key_field, "picture", "") or ""
+        ).upper()
 
-        return "VARCHAR"
+        if "X" in picture:
+            return "CHAR"
+
+        if "9" in picture:
+            return "DECIMAL"
+
+        if self.is_group_like_field(field=key_field):
+            return "CHAR"
+
+        return "CHAR"
 
     def length_for_key_field(
         self,
         key_field,
         record,
     ) -> int | None:
-        length = getattr(
-            key_field,
-            "length",
-            None,
-        )
+        length = getattr(key_field, "length", None)
 
         if length:
-            return int(length)
+            try:
+                return int(length)
+            except Exception:
+                pass
 
-        if (
-            getattr(key_field, "is_group", False)
-            or getattr(key_field, "has_child", False)
-        ):
+        if self.is_group_like_field(field=key_field):
             return self.group_length(
                 key_field=key_field,
                 fields=getattr(record, "mapping_fields", []) or [],
             )
 
-        return 255
+        return 20
 
     def group_length(
         self,
         key_field,
         fields,
     ) -> int:
-        level = getattr(
-            key_field,
-            "level",
-            None,
-        )
+        level = getattr(key_field, "level", None)
 
         if level is None:
-            return 255
+            return 20
 
         try:
-            parent_level = int(
-                level,
-            )
+            group_level = int(level)
         except Exception:
-            return 255
-
-        started = False
-        total = 0
+            return 20
 
         key_name = NameNormalizer.normalize(
-            getattr(key_field, "name", ""),
+            getattr(key_field, "name", "") or "",
         )
 
-        for candidate in fields:
-            candidate_name = NameNormalizer.normalize(
-                getattr(candidate, "name", ""),
+        collecting = False
+        total = 0
+
+        for field in fields or []:
+            field_name = NameNormalizer.normalize(
+                getattr(field, "name", "") or "",
             )
 
-            if candidate is key_field or candidate_name == key_name:
-                started = True
-                continue
+            field_level = getattr(field, "level", None)
 
-            if not started:
-                continue
-
-            candidate_level = getattr(
-                candidate,
-                "level",
-                None,
-            )
-
-            if candidate_level is None:
+            if field_level is None:
                 continue
 
             try:
-                child_level = int(
-                    candidate_level,
-                )
+                field_level_int = int(field_level)
             except Exception:
                 continue
 
-            if child_level <= parent_level:
+            if not collecting:
+                if field_name == key_name:
+                    collecting = True
+                continue
+
+            if field_level_int <= group_level:
                 break
 
-            if getattr(candidate, "has_child", False):
+            if self.is_non_physical_group_field(field=field):
                 continue
 
-            child_length = self.effective_field_length(
-                field=candidate,
-            )
+            length = getattr(field, "length", None)
 
-            if not child_length:
+            try:
+                if length:
+                    total += int(length)
+            except Exception:
                 continue
 
-            total += child_length
-
-        return total if total > 0 else 255
+        return total if total > 0 else 20
 
     def adjust_occurs_field(
         self,
         field,
     ):
-        occurs = getattr(
-            field,
-            "occurs",
-            False,
-        )
-
-        occurs_max = getattr(
-            field,
-            "occurs_max",
-            None,
-        )
+        occurs = getattr(field, "occurs", False)
+        occurs_max = getattr(field, "occurs_max", None)
 
         if not occurs or not occurs_max:
             return field
 
-        total_length = self.effective_field_length(
-            field=field,
-        )
+        length = getattr(field, "length", None)
 
-        if not total_length:
+        if length is None:
             return field
 
-        return field.model_copy(
-            update={
-                "datatype": "VARCHAR",
-                "length": total_length,
-                "scale": None,
-            }
-        )
+        try:
+            adjusted_length = int(length) * int(occurs_max)
+        except Exception:
+            return field
 
-    def effective_field_length(
+        try:
+            return field.model_copy(
+                update={
+                    "length": adjusted_length,
+                }
+            )
+        except Exception:
+            try:
+                field.length = adjusted_length
+            except Exception:
+                pass
+
+            return field
+
+    def is_non_physical_group_field(
         self,
         field,
-    ) -> int | None:
-        length = getattr(
-            field,
-            "length",
-            None,
+    ) -> bool:
+        if getattr(field, "datatype", None) == "DATE":
+            return False
+
+        if getattr(field, "basetype", None) == "DATE":
+            return False
+
+        if getattr(field, "is_group", False):
+            return True
+
+        if getattr(field, "has_child", False):
+            return True
+
+        if self.is_group_like_field(field=field) and not self.has_physical_definition(field=field):
+            return True
+
+        return False
+
+    def is_group_like_field(
+        self,
+        field,
+    ) -> bool:
+        return bool(
+            getattr(field, "is_group", False)
+            or getattr(field, "has_child", False)
         )
 
-        occurs_max = getattr(
-            field,
-            "occurs_max",
-            None,
-        )
+    def has_physical_definition(
+        self,
+        field,
+    ) -> bool:
+        if getattr(field, "picture", None):
+            return True
 
-        start_position = getattr(
-            field,
-            "start_position",
-            None,
-        )
+        if getattr(field, "datatype", None):
+            return True
 
-        end_position = getattr(
-            field,
-            "end_position",
-            None,
-        )
+        if getattr(field, "length", None):
+            return True
 
-        physical_length = None
+        return False
 
-        if start_position is not None and end_position is not None:
-            try:
-                physical_length = int(end_position) - int(start_position) + 1
-            except Exception:
-                physical_length = None
-
-        numeric_length = None
-
-        if length is not None:
-            try:
-                numeric_length = int(length)
-            except Exception:
-                numeric_length = None
-
-        expanded_length = None
-
-        if occurs_max and numeric_length:
-            try:
-                expanded_length = int(occurs_max) * int(numeric_length)
-            except Exception:
-                expanded_length = None
-
-        candidates = [
-            value
-            for value in [
-                physical_length,
-                expanded_length,
-                numeric_length,
-            ]
-            if value is not None and value > 0
-        ]
-
-        if not candidates:
-            return None
-
-        return max(candidates)
+    def is_filler_field(
+        self,
+        field,
+    ) -> bool:
+        return str(
+            getattr(field, "name", "") or ""
+        ).upper().startswith("FILLER")
 
     def is_date_part_name(
         self,
@@ -490,18 +582,13 @@ class CanonicalSchemaBuilder:
             field_name,
         )
 
-        parts = normalized.split()
+        normalized = normalized.replace(" ", "_")
 
-        if (
-            len(parts) > 1
-            and parts[-1].isdigit()
-            and len(parts[-1]) == 4
-        ):
-            return " ".join(
-                parts[:-1],
-            )
-
-        return normalized
+        return __import__("re").sub(
+            r"_[0-9]{4}$",
+            "",
+            normalized,
+        )
 
     def add_sets_and_relationships(
         self,
@@ -539,9 +626,7 @@ class CanonicalSchemaBuilder:
             if key in added_relationships:
                 continue
 
-            added_relationships.add(
-                key,
-            )
+            added_relationships.add(key)
 
             schema.sets.append(
                 CanonicalSet(

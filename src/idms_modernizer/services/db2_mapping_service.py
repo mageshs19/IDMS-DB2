@@ -21,12 +21,12 @@ class DB2MappingService:
     - No hardcoded column names.
     - No hardcoded SET names.
     - Converts detected IDMS owner/member SETs into DB2 foreign keys.
-    - Uses only owner PK columns for FK columns.
-    - If owner has composite PK, each PK column becomes one FK column.
-    - If a record has no PK, creates ID_RECORD_<record_name>.
+    - Uses every owner PK column for FK columns.
+    - If owner has composite PK, every PK column becomes one FK column.
+    - If a record has no PK, creates ID_RECORD_<record_name> CHAR(20).
     """
 
-    TECHNICAL_KEY_DATATYPE = "DECIMAL(18)"
+    TECHNICAL_KEY_DATATYPE = "CHAR(20)"
 
     def build_db2_model(
         self,

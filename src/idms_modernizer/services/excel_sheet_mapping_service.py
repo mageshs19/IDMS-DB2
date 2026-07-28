@@ -25,8 +25,8 @@ class ExcelSheetMappingService:
     - FK appears as a value in DB2 Key.
     - There is no separate SET column.
     - SET/FK rows are added record-wise after audit rows.
-    - If DB2 model already has foreign_keys, those are used.
-    - If DB2 model does not have foreign_keys, rows are still inferred from metadata.relationships and owner PK columns.
+    - Cobol Record IDMS for SET/FK rows is the original COBOL record name only.
+    - SET name is placed in Relation.
     """
 
     COLUMNS = [
@@ -356,6 +356,7 @@ class ExcelSheetMappingService:
 
         rows.extend(
             self.build_set_fk_rows_from_db2_foreign_keys(
+                record=record,
                 table=table,
                 emitted=emitted,
             )
@@ -375,10 +376,13 @@ class ExcelSheetMappingService:
 
     def build_set_fk_rows_from_db2_foreign_keys(
         self,
+        record,
         table: DB2Table,
         emitted: set[tuple[str, str, str, str]],
     ) -> list[dict[str, str]]:
         rows: list[dict[str, str]] = []
+
+        cobol_record_name = getattr(record, "name", "") or ""
 
         column_lookup = {
             NameNormalizer.normalize(getattr(column, "name", "") or ""): column
@@ -403,7 +407,7 @@ class ExcelSheetMappingService:
             set_name = getattr(foreign_key, "set_name", "") or ""
 
             key = (
-                NameNormalizer.normalize(set_name),
+                NameNormalizer.normalize(cobol_record_name),
                 NameNormalizer.normalize(getattr(table, "name", "") or ""),
                 NameNormalizer.normalize(getattr(fk_column, "name", "") or ""),
                 self.get_db2_datatype(db2_column=fk_column),
@@ -416,7 +420,7 @@ class ExcelSheetMappingService:
 
             row = self.empty_row()
 
-            row["Cobol Record IDMS"] = set_name
+            row["Cobol Record IDMS"] = cobol_record_name
             row["IDMS Key"] = "SET"
             row["DB2 Key"] = "FK"
             row["New DB2 Record"] = getattr(table, "name", "") or ""
@@ -424,6 +428,7 @@ class ExcelSheetMappingService:
             row["New DB2 Data Type"] = self.get_db2_datatype(
                 db2_column=fk_column,
             )
+            row["Relation"] = set_name
 
             rows.append(row)
 
@@ -439,8 +444,12 @@ class ExcelSheetMappingService:
     ) -> list[dict[str, str]]:
         rows: list[dict[str, str]] = []
 
-        current_record_name = getattr(record, "name", "") or ""
-        normalized_current_record = NameNormalizer.normalize(current_record_name)
+        cobol_record_name = getattr(record, "name", "") or ""
+
+        normalized_current_record = NameNormalizer.normalize(
+            cobol_record_name
+        )
+
         normalized_current_table = NameNormalizer.normalize(
             getattr(member_table, "name", "") or ""
         )
@@ -461,7 +470,9 @@ class ExcelSheetMappingService:
             if not set_name or not owner_record_name or not member_record_name:
                 continue
 
-            normalized_member_record = NameNormalizer.normalize(member_record_name)
+            normalized_member_record = NameNormalizer.normalize(
+                member_record_name
+            )
 
             is_current_member = (
                 normalized_member_record == normalized_current_record
@@ -499,16 +510,20 @@ class ExcelSheetMappingService:
 
                 if fk_column is not None:
                     fk_column_name = getattr(fk_column, "name", "") or ""
-                    fk_datatype = self.get_db2_datatype(db2_column=fk_column)
+                    fk_datatype = self.get_db2_datatype(
+                        db2_column=fk_column,
+                    )
                 else:
                     fk_column_name = self.generated_set_fk_column_name(
                         set_name=set_name,
                         owner_pk_column_name=getattr(owner_pk_column, "name", "") or "",
                     )
-                    fk_datatype = self.get_db2_datatype(db2_column=owner_pk_column)
+                    fk_datatype = self.get_db2_datatype(
+                        db2_column=owner_pk_column,
+                    )
 
                 key = (
-                    NameNormalizer.normalize(set_name),
+                    NameNormalizer.normalize(cobol_record_name),
                     NameNormalizer.normalize(getattr(member_table, "name", "") or ""),
                     NameNormalizer.normalize(fk_column_name),
                     fk_datatype,
@@ -521,12 +536,13 @@ class ExcelSheetMappingService:
 
                 row = self.empty_row()
 
-                row["Cobol Record IDMS"] = set_name
+                row["Cobol Record IDMS"] = cobol_record_name
                 row["IDMS Key"] = "SET"
                 row["DB2 Key"] = "FK"
                 row["New DB2 Record"] = getattr(member_table, "name", "") or ""
                 row["New DB2 Field name"] = fk_column_name
                 row["New DB2 Data Type"] = fk_datatype
+                row["Relation"] = set_name
 
                 rows.append(row)
 
@@ -734,7 +750,9 @@ class ExcelSheetMappingService:
         if not field_name:
             return False
 
-        if not field_name.endswith("_DATE") and "DATE" not in field_name.split("_"):
+        tokens = self.split_name_tokens(field_name)
+
+        if "DATE" not in tokens and not field_name.endswith("_DATE"):
             return False
 
         length = self.get_field_length(field=field)
@@ -820,11 +838,7 @@ class ExcelSheetMappingService:
         if not normalized:
             return []
 
-        tokens = [
-            token
-            for token in normalized.split("_")
-            if token
-        ]
+        tokens = self.split_name_tokens(normalized)
 
         candidates = []
 
@@ -849,6 +863,21 @@ class ExcelSheetMappingService:
             )
 
         return candidates
+
+    def split_name_tokens(
+        self,
+        value: str,
+    ) -> list[str]:
+        normalized = str(value or "").upper().strip()
+
+        if not normalized:
+            return []
+
+        return [
+            token
+            for token in re.split(r"[\s_]+", normalized)
+            if token
+        ]
 
     def date_part_type(
         self,
@@ -1330,6 +1359,8 @@ class ExcelSheetMappingService:
 
         if not text:
             return ""
+
+        text = text.replace(" ", "_")
 
         return re.sub(
             r"_[0-9]{4}$",
