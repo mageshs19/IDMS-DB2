@@ -13,6 +13,18 @@ class SchemaPictureEnricher:
     - No specific record names are hardcoded.
     - PIC text is preserved as close to schema listing as possible.
     - If PDF extraction drops parentheses, PIC is reconstructed from usage and storage length.
+
+    Rules:
+    - PIC X(n)                       -> CHAR metadata length n
+    - PIC 9(n)                       -> DECIMAL metadata precision n scale 0
+    - PIC S9(n)                      -> DECIMAL metadata precision n scale 0
+    - PIC 9(n) COMP-3                -> DECIMAL metadata precision n scale 0
+    - PIC S9(n) COMP-3               -> DECIMAL metadata precision n scale 0
+    - PIC 9(n)V9(m)                  -> DECIMAL metadata precision n+m scale m
+    - PIC S9(n)V9(m)                 -> DECIMAL metadata precision n+m scale m
+    - PIC 9(n)V9(m) COMP-3           -> DECIMAL metadata precision n+m scale m
+    - PIC S9(n)V9(m) COMP-3          -> DECIMAL metadata precision n+m scale m
+    - DATE groups and generic DA / DATE fields -> DATE metadata
     """
 
     FIELD_START_PATTERN = re.compile(
@@ -84,9 +96,11 @@ class SchemaPictureEnricher:
         fields: list[DataField],
         lines: list[str],
     ) -> list[DataField]:
-        print("USING SCHEMA PICTURE ENRICHER VERSION FULL-PIC-FORMAT-FIX")
+        print("USING SCHEMA PICTURE ENRICHER VERSION FINAL-PIC-DB2-RULES")
 
-        field_blocks = self.build_field_blocks(lines=lines)
+        field_blocks = self.build_field_blocks(
+            lines=lines,
+        )
 
         enriched_fields: list[DataField] = []
 
@@ -111,7 +125,9 @@ class SchemaPictureEnricher:
         self,
         lines: list[str],
     ) -> dict[str, str]:
-        normalized_lines = self.normalize_lines(lines=lines)
+        normalized_lines = self.normalize_lines(
+            lines=lines,
+        )
 
         starts: list[tuple[int, str]] = []
 
@@ -138,8 +154,13 @@ class SchemaPictureEnricher:
             else:
                 end_index = len(normalized_lines)
 
-            block = " ".join(normalized_lines[start_index:end_index])
-            normalized_field_name = NameNormalizer.normalize(field_name)
+            block = " ".join(
+                normalized_lines[start_index:end_index]
+            )
+
+            normalized_field_name = NameNormalizer.normalize(
+                field_name,
+            )
 
             if normalized_field_name:
                 blocks[normalized_field_name] = block
@@ -161,7 +182,6 @@ class SchemaPictureEnricher:
             value = value.replace("\u00a0", " ")
             value = value.replace("PICTURE.", "PICTURE")
             value = value.replace("PIC.", "PIC")
-
             value = re.sub(r"<[^>]+>", " ", value)
             value = re.sub(r"\s+", " ", value).strip()
 
@@ -175,7 +195,9 @@ class SchemaPictureEnricher:
         field_name: str,
         field_blocks: dict[str, str],
     ) -> str:
-        normalized_name = NameNormalizer.normalize(field_name or "")
+        normalized_name = NameNormalizer.normalize(
+            field_name or "",
+        )
 
         if not normalized_name:
             return ""
@@ -183,7 +205,9 @@ class SchemaPictureEnricher:
         if normalized_name in field_blocks:
             return field_blocks[normalized_name]
 
-        suffix_removed = self.remove_record_suffix(value=normalized_name)
+        suffix_removed = self.remove_record_suffix(
+            value=normalized_name,
+        )
 
         for block_name, block in field_blocks.items():
             if self.remove_record_suffix(block_name) == suffix_removed:
@@ -300,7 +324,9 @@ class SchemaPictureEnricher:
         if re.search(r"\bCOMP\b", upper):
             return "COMP"
 
-        usage_match = self.USAGE_PATTERN.search(block or "")
+        usage_match = self.USAGE_PATTERN.search(
+            block or "",
+        )
 
         if usage_match:
             return usage_match.group("usage").upper()
@@ -311,7 +337,9 @@ class SchemaPictureEnricher:
         self,
         block: str,
     ) -> tuple[int | None, int | None]:
-        match = self.START_LENGTH_PATTERN.search(block or "")
+        match = self.START_LENGTH_PATTERN.search(
+            block or "",
+        )
 
         if not match:
             return None, None
@@ -328,12 +356,21 @@ class SchemaPictureEnricher:
         if not block:
             return None
 
-        picture_area = self.remove_trailing_start_and_length(value=block)
+        picture_area = self.remove_trailing_start_and_length(
+            value=block,
+        )
 
-        keyword_matches = list(self.PIC_WITH_KEYWORD_PATTERN.finditer(picture_area))
+        keyword_matches = list(
+            self.PIC_WITH_KEYWORD_PATTERN.finditer(
+                picture_area,
+            )
+        )
 
         if keyword_matches:
-            match = self.best_picture_match(keyword_matches)
+            match = self.best_picture_match(
+                keyword_matches,
+            )
+
             raw_picture = self.clean_picture(
                 value=match.group("pic"),
                 usage=usage,
@@ -346,12 +383,18 @@ class SchemaPictureEnricher:
                 storage_length=storage_length,
             )
 
-        anywhere_matches = list(self.PIC_ANYWHERE_PATTERN.finditer(picture_area))
+        anywhere_matches = list(
+            self.PIC_ANYWHERE_PATTERN.finditer(
+                picture_area,
+            )
+        )
 
         if not anywhere_matches:
             return None
 
-        match = self.best_picture_match(matches=anywhere_matches)
+        match = self.best_picture_match(
+            matches=anywhere_matches,
+        )
 
         raw_picture = self.clean_picture(
             value=match.group("pic"),
@@ -448,21 +491,6 @@ class SchemaPictureEnricher:
 
         return max((int(storage_length) * 2) - 1, 1)
 
-    def format_picture_spacing(
-        self,
-        picture: str | None,
-    ) -> str | None:
-        if not picture:
-            return None
-
-        text = str(picture).upper().strip()
-        text = text.replace("COMP-3", " COMP-3")
-        text = text.replace("COMP", " COMP")
-
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
-
     def remove_trailing_start_and_length(
         self,
         value: str,
@@ -491,22 +519,36 @@ class SchemaPictureEnricher:
             if usage_upper in {"COMP", "COMP-3"} and usage_upper not in text:
                 text = f"{text} {usage_upper}"
 
-        return self.format_picture_spacing(text)
+        return self.format_picture_spacing(
+            picture=text,
+        )
+
+    def format_picture_spacing(
+        self,
+        picture: str | None,
+    ) -> str | None:
+        if not picture:
+            return None
+
+        text = str(picture).upper().strip()
+        text = text.replace("COMP-3", " COMP-3")
+        text = re.sub(r"\bCOMP\b", " COMP", text)
+        text = re.sub(r"\s+", " ", text).strip()
+
+        return text
 
     def picture_core(
         self,
         picture: str | None,
     ) -> str:
         text = str(picture or "").upper()
-
         text = text.replace("COMP-3", "")
-        text = text.replace("COMP", "")
+        text = re.sub(r"\bCOMP\b", "", text)
         text = text.replace("DISPLAY", "")
         text = text.replace("PIC", "")
         text = text.replace("PICTURE", "")
         text = text.replace(" ", "")
         text = text.replace(".", "")
-
         return text
 
     def derive_type_from_picture(
@@ -527,21 +569,32 @@ class SchemaPictureEnricher:
             usage=usage,
         )
 
-        core = self.picture_core(picture=pic)
+        core = self.picture_core(
+            picture=pic,
+        )
 
         if not core:
             return None, storage_length, None, pic
 
         if self.picture_is_character(core):
-            length = self.character_length(picture=core)
+            length = self.character_length(
+                picture=core,
+            )
+
             return "CHAR", length, None, pic
 
         if self.picture_is_decimal(core):
-            precision, scale = self.decimal_precision_scale(picture=core)
+            precision, scale = self.decimal_precision_scale(
+                picture=core,
+            )
+
             return "DECIMAL", precision, scale, pic
 
         if self.picture_is_numeric(core):
-            precision = self.numeric_precision(picture=core)
+            precision = self.numeric_precision(
+                picture=core,
+            )
+
             return "DECIMAL", precision, 0, pic
 
         return None, storage_length, None, pic
@@ -591,10 +644,8 @@ class SchemaPictureEnricher:
     ) -> tuple[int, int]:
         pic = picture.upper().replace("S", "")
         before_v, after_v = pic.split("V", 1)
-
         integer_digits = self.count_9_digits(value=before_v)
         decimal_digits = self.count_9_digits(value=after_v)
-
         return integer_digits + decimal_digits, decimal_digits
 
     def numeric_precision(
@@ -607,7 +658,9 @@ class SchemaPictureEnricher:
             before_v, after_v = pic.split("V", 1)
             return self.count_9_digits(before_v) + self.count_9_digits(after_v)
 
-        return self.count_9_digits(value=pic)
+        return self.count_9_digits(
+            value=pic,
+        )
 
     def count_9_digits(
         self,
@@ -634,7 +687,10 @@ class SchemaPictureEnricher:
         storage_length: int | None,
         datatype: str | None,
     ) -> bool:
-        name = NameNormalizer.normalize(getattr(field, "name", "") or "")
+        name = NameNormalizer.normalize(
+            getattr(field, "name", "") or "",
+        )
+
         normalized_name = name.replace(" ", "_")
 
         if datatype == "DATE":
@@ -646,7 +702,11 @@ class SchemaPictureEnricher:
         if "_DATE_" in normalized_name:
             return True
 
-        tokens = [token for token in re.split(r"[\s_]+", normalized_name) if token]
+        tokens = [
+            token
+            for token in re.split(r"[\s_]+", normalized_name)
+            if token
+        ]
 
         if tokens and tokens[0] == "DA":
             return True
@@ -682,5 +742,4 @@ class SchemaPictureEnricher:
     ) -> str:
         normalized = NameNormalizer.normalize(value or "")
         normalized = normalized.replace(" ", "_")
-
         return re.sub(r"_[0-9]{4}$", "", normalized)
