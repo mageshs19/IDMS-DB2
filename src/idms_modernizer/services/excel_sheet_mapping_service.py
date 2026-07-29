@@ -24,8 +24,11 @@ class ExcelSheetMappingService:
     - SET appears as IDMS Key value only.
     - SET name goes into Relation.
     - Cobol Record IDMS for SET/FK rows is the COBOL record name only.
-    - If outer CALC group exists, all descendants show CALC.
-    - Date fields inside CALC group show CALC but are not PK.
+    - If outer CALC group exists:
+      - Outer group shows CALC only.
+      - Intermediate non-date groups show CALC and PK.
+      - Physical non-date leaves show CALC and PK.
+      - Date groups and date parts show neither CALC nor PK.
     - Date parts remain visible but DB2 mapping stays blank.
     - Outer date group shows New DB2 Record and DATE datatype, but New DB2 Field name remains blank.
     - FILLER rows are included as COBOL-only rows.
@@ -91,10 +94,8 @@ class ExcelSheetMappingService:
         )
 
         for record in getattr(metadata, "records", []) or []:
-            record_name = getattr(record, "name", "") or ""
-
             table = self.find_table_for_record(
-                record_name=record_name,
+                record_name=getattr(record, "name", "") or "",
                 table_lookup=table_lookup,
             )
 
@@ -151,12 +152,21 @@ class ExcelSheetMappingService:
             or []
         )
 
+        group_scope = self.build_group_scope(
+            fields=mapping_fields,
+        )
+
+        date_scope = self.build_date_scope(
+            fields=mapping_fields,
+        )
+
         date_group_info = self.collect_date_group_info(
             fields=mapping_fields,
         )
 
         calc_scope = self.build_calc_scope(
             record=record,
+            fields=mapping_fields,
         )
 
         for field in mapping_fields:
@@ -173,16 +183,30 @@ class ExcelSheetMappingService:
                 getattr(field, "name", "") or ""
             )
 
-            is_outer_date = self.is_actual_outer_date_field(
-                field=field,
-                date_group_info=date_group_info,
+            is_group = field_name in group_scope
+
+            is_date_child = self.is_date_part_name(
+                field_name=field_name,
             )
 
-            is_date_child = (
-                self.inferred_date_key_for_date_part(
-                    field_name=field_name,
+            is_outer_date = (
+                self.is_actual_outer_date_field(
+                    field=field,
+                    date_group_info=date_group_info,
                 )
-                is not None
+                or date_scope.get(field_name) == "DATE_GROUP"
+            )
+
+            is_date = (
+                is_outer_date
+                or is_date_child
+                or self.is_date_field(field=field)
+                or field_name in date_scope
+            )
+
+            calc_status = self.calc_status_for_field(
+                field=field,
+                calc_scope=calc_scope,
             )
 
             db2_column = None
@@ -199,7 +223,15 @@ class ExcelSheetMappingService:
                 column=db2_column,
             )
 
-            if is_outer_date or is_date_child or self.is_date_field(field=field):
+            if calc_status == "ROOT":
+                db2_key = ""
+
+            if calc_status == "DESCENDANT" and not is_date:
+                db2_key = self.add_pk_to_db2_key(
+                    db2_key=db2_key,
+                )
+
+            if is_date:
                 db2_key = ""
 
             row = self.empty_row()
@@ -208,10 +240,9 @@ class ExcelSheetMappingService:
             row["Cobol Zone"] = self.format_cobol_zone(field=field)
 
             row["IDMS Key"] = self.idms_key_label(
-                record=record,
-                field=field,
+                calc_status=calc_status,
+                is_date=is_date,
                 db2_key=db2_key,
-                calc_scope=calc_scope,
             )
 
             row["IDMS PIC Clause"] = self.get_field_picture(
@@ -229,17 +260,11 @@ class ExcelSheetMappingService:
             row["DB2 Key"] = db2_key
 
             if is_outer_date:
-                if table is not None:
-                    row["New DB2 Record"] = getattr(table, "name", "") or ""
-
+                row["New DB2 Record"] = (
+                    getattr(table, "name", "") if table is not None else ""
+                )
                 row["New DB2 Field name"] = ""
-
-                if db2_column is not None:
-                    row["New DB2 Data Type"] = self.get_db2_datatype(
-                        db2_column=db2_column,
-                    )
-                else:
-                    row["New DB2 Data Type"] = "DATE"
+                row["New DB2 Data Type"] = "DATE"
 
             elif is_date_child:
                 row["New DB2 Record"] = ""
@@ -248,10 +273,22 @@ class ExcelSheetMappingService:
                 row["DB2 Key"] = ""
 
             elif self.is_date_field(field=field):
-                row["New DB2 Record"] = getattr(table, "name", "") if table else ""
+                row["New DB2 Record"] = (
+                    getattr(table, "name", "") if table is not None else ""
+                )
                 row["New DB2 Field name"] = ""
                 row["New DB2 Data Type"] = "DATE"
                 row["DB2 Key"] = ""
+
+            elif calc_status == "ROOT":
+                row["New DB2 Record"] = ""
+                row["New DB2 Field name"] = ""
+                row["New DB2 Data Type"] = ""
+
+            elif is_group:
+                row["New DB2 Record"] = ""
+                row["New DB2 Field name"] = ""
+                row["New DB2 Data Type"] = ""
 
             elif db2_column is not None and table is not None:
                 row["New DB2 Record"] = getattr(table, "name", "") or ""
@@ -277,11 +314,172 @@ class ExcelSheetMappingService:
 
         return rows
 
+    def add_pk_to_db2_key(
+        self,
+        db2_key: str,
+    ) -> str:
+        parts = [
+            part.strip().upper()
+            for part in str(db2_key or "").split("/")
+            if part.strip()
+        ]
+
+        if "PK" not in parts:
+            parts.insert(0, "PK")
+
+        ordered_parts = []
+
+        if "PK" in parts:
+            ordered_parts.append("PK")
+
+        if "FK" in parts:
+            ordered_parts.append("FK")
+
+        return "/".join(ordered_parts)
+
+    def build_group_scope(
+        self,
+        fields,
+    ) -> dict[str, bool]:
+        group_scope: dict[str, bool] = {}
+        field_list = list(fields or [])
+
+        for index, field in enumerate(field_list):
+            field_name = NameNormalizer.normalize(
+                getattr(field, "name", "") or ""
+            )
+
+            field_level = getattr(field, "level", None)
+
+            if not field_name or field_level is None:
+                continue
+
+            try:
+                field_level_int = int(field_level)
+            except Exception:
+                continue
+
+            for next_field in field_list[index + 1:]:
+                next_level = getattr(next_field, "level", None)
+
+                if next_level is None:
+                    continue
+
+                try:
+                    next_level_int = int(next_level)
+                except Exception:
+                    continue
+
+                if next_level_int > field_level_int:
+                    group_scope[field_name] = True
+                    break
+
+                if next_level_int <= field_level_int:
+                    break
+
+        return group_scope
+
+    def build_date_scope(
+        self,
+        fields,
+    ) -> dict[str, str]:
+        date_scope: dict[str, str] = {}
+        field_list = list(fields or [])
+
+        for index, field in enumerate(field_list):
+            field_name = NameNormalizer.normalize(
+                getattr(field, "name", "") or ""
+            )
+
+            field_level = getattr(field, "level", None)
+
+            if not field_name:
+                continue
+
+            if self.is_date_part_name(field_name=field_name):
+                date_scope[field_name] = "DATE_PART"
+                continue
+
+            if self.is_date_field(field=field):
+                date_scope[field_name] = "DATE_GROUP"
+                continue
+
+            if field_level is None:
+                continue
+
+            try:
+                field_level_int = int(field_level)
+            except Exception:
+                continue
+
+            descendants = []
+
+            for next_field in field_list[index + 1:]:
+                next_level = getattr(next_field, "level", None)
+
+                if next_level is None:
+                    continue
+
+                try:
+                    next_level_int = int(next_level)
+                except Exception:
+                    continue
+
+                if next_level_int <= field_level_int:
+                    break
+
+                descendants.append(next_field)
+
+            parts_found = set()
+
+            for descendant in descendants:
+                descendant_name = NameNormalizer.normalize(
+                    getattr(descendant, "name", "") or ""
+                )
+
+                part = self.date_part_type_from_name(
+                    field_name=descendant_name,
+                )
+
+                if part:
+                    parts_found.add(part)
+
+            if {"YEAR", "MONTH", "DAY"}.issubset(parts_found):
+                date_scope[field_name] = "DATE_GROUP"
+
+                for descendant in descendants:
+                    descendant_name = NameNormalizer.normalize(
+                        getattr(descendant, "name", "") or ""
+                    )
+
+                    if self.date_part_type_from_name(field_name=descendant_name):
+                        date_scope[descendant_name] = "DATE_PART"
+
+        return date_scope
+
+    def date_part_type_from_name(
+        self,
+        field_name: str,
+    ) -> str | None:
+        tokens = self.split_name_tokens(field_name)
+
+        for token in tokens:
+            part = self.date_part_type(
+                token=token,
+                tokens=tokens,
+            )
+
+            if part:
+                return part
+
+        return None
+
     def build_calc_scope(
         self,
         record,
-    ) -> dict[str, bool]:
-        scope: dict[str, bool] = {}
+        fields,
+    ) -> dict[str, str]:
+        scope: dict[str, str] = {}
 
         primary_key = getattr(record, "primary_key", None)
 
@@ -292,11 +490,7 @@ class ExcelSheetMappingService:
             primary_key,
         )
 
-        mapping_fields = (
-            getattr(record, "mapping_fields", None)
-            or getattr(record, "fields", None)
-            or []
-        )
+        mapping_fields = list(fields or [])
 
         key_field = None
         key_index = None
@@ -311,23 +505,22 @@ class ExcelSheetMappingService:
                 key_index = index
                 break
 
-            if self.remove_record_suffix(field_name) == self.remove_record_suffix(normalized_primary_key):
+            if self.remove_record_suffix(field_name) == self.remove_record_suffix(
+                normalized_primary_key
+            ):
                 key_field = field
                 key_index = index
                 break
 
         if key_field is None or key_index is None:
-            scope[normalized_primary_key] = True
+            scope[normalized_primary_key] = "ROOT"
             return scope
 
         key_name = NameNormalizer.normalize(
             getattr(key_field, "name", "") or ""
         )
 
-        scope[key_name] = True
-
-        if not self.is_group_like_field(field=key_field):
-            return scope
+        scope[key_name] = "ROOT"
 
         key_level = getattr(key_field, "level", None)
 
@@ -358,9 +551,62 @@ class ExcelSheetMappingService:
                 break
 
             if child_name:
-                scope[child_name] = True
+                scope[child_name] = "DESCENDANT"
 
         return scope
+
+    def calc_status_for_field(
+        self,
+        field,
+        calc_scope: dict[str, str],
+    ) -> str:
+        field_name = NameNormalizer.normalize(
+            getattr(field, "name", "") or ""
+        )
+
+        if not field_name:
+            return ""
+
+        if field_name in calc_scope:
+            return calc_scope[field_name]
+
+        suffix_removed = self.remove_record_suffix(field_name)
+
+        for key, value in calc_scope.items():
+            if self.remove_record_suffix(key) == suffix_removed:
+                return value
+
+        return ""
+
+    def idms_key_label(
+        self,
+        calc_status: str,
+        is_date: bool,
+        db2_key: str,
+    ) -> str:
+        labels = []
+
+        if calc_status and not is_date:
+            labels.append("CALC")
+
+        if "FK" in [
+            part.strip().upper()
+            for part in str(db2_key or "").split("/")
+            if part.strip()
+        ]:
+            labels.append("SET")
+
+        return "; ".join(labels)
+
+    def is_date_part_name(
+        self,
+        field_name: str,
+    ) -> bool:
+        return bool(
+            self.parse_date_part_candidates(
+                field_name=field_name,
+            )
+        )
 
     def build_filler_row(
         self,
@@ -934,12 +1180,12 @@ class ExcelSheetMappingService:
         self,
         field_name: str,
     ) -> list[dict]:
-        normalized = NameNormalizer.normalize(field_name or "")
+        tokens = self.split_name_tokens(
+            field_name,
+        )
 
-        if not normalized:
+        if len(tokens) < 2:
             return []
-
-        tokens = self.split_name_tokens(normalized)
 
         candidates = []
 
@@ -970,6 +1216,9 @@ class ExcelSheetMappingService:
         value: str,
     ) -> list[str]:
         normalized = str(value or "").upper().strip()
+        normalized = NameNormalizer.normalize(
+            normalized,
+        )
 
         if not normalized:
             return []
@@ -1033,55 +1282,6 @@ class ExcelSheetMappingService:
             labels.append("FK")
 
         return "/".join(labels)
-
-    def idms_key_label(
-        self,
-        record,
-        field,
-        db2_key: str,
-        calc_scope: dict[str, bool] | None = None,
-    ) -> str:
-        labels = []
-
-        if self.is_calc_key_field(
-            record=record,
-            field=field,
-            calc_scope=calc_scope or {},
-        ):
-            labels.append("CALC")
-
-        if "FK" in [
-            part.strip().upper()
-            for part in str(db2_key or "").split("/")
-            if part.strip()
-        ]:
-            labels.append("SET")
-
-        return "; ".join(labels)
-
-    def is_calc_key_field(
-        self,
-        record,
-        field,
-        calc_scope: dict[str, bool],
-    ) -> bool:
-        field_name = NameNormalizer.normalize(
-            getattr(field, "name", "") or ""
-        )
-
-        if not field_name:
-            return False
-
-        if field_name in calc_scope:
-            return True
-
-        suffix_removed = self.remove_record_suffix(field_name)
-
-        for key in calc_scope:
-            if self.remove_record_suffix(key) == suffix_removed:
-                return True
-
-        return False
 
     def is_primary_key_column(
         self,
