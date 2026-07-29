@@ -1,7 +1,5 @@
 import re
 
-from collections import defaultdict
-
 from idms_modernizer.domain.canonical_models import CanonicalSchema
 from idms_modernizer.domain.db2_models import (
     DB2Column,
@@ -12,40 +10,110 @@ from idms_modernizer.domain.db2_models import (
 from idms_modernizer.services.db2_datatype_mapper import DB2DatatypeMapper
 
 
+print("LOADED DB2MappingService VERSION NAMING-FK-DATE-FIX-2026-07-29")
+
+
 class DB2MappingService:
     """
     Builds DB2 model from canonical schema.
 
-    Generic behavior only:
-    - No hardcoded table names.
-    - No hardcoded column names.
-    - No hardcoded SET names.
-    - SET / FK names are derived from schema relationships.
+    Naming rules implemented:
 
-    Naming rules:
-    - Normal COBOL field:
-      COBOL field name -> replace '-' with '_' -> strip punctuation
-      -> remove generic trailing qualifier where applicable
-      -> append _479<record-suffix>.
+    1. Normal COBOL business field:
+       - Start from COBOL business field.
+       - Normalize separators to underscore.
+       - Apply project abbreviations.
+       - Remove generic trailing qualifiers where applicable.
+       - Append _479<record-code>.
 
-    - Date field:
-      outer COBOL date field becomes one DB2 DATE column.
-      DB2 date column name is derived from outer date name and record suffix.
+       Example:
+       NR-CIO-FORM-AS in VMBSIC -> NR_CIOFMAS_479BSIC
+       CT-RK-TGDSV in VMBFORM   -> CT_RKTGDSV_479FORM
+       NR-ID-STOCK in VMBCOUP   -> NR_IDSTOCK_479COUP
 
-    - Foreign key:
-      FK column reuses exact referenced/master DB2 column name.
-      No SET prefix is added to FK column names.
+    2. Date field:
+       - Outer COBOL date field becomes one DB2 DATE column.
+       - DB2 date name keeps DA prefix.
+       - Append _479<record-code>.
 
-    - Missing PK:
-      ID_RECORD_<record> CHAR(20).
+       Example:
+       DA-CPTA-GDIFC -> DA_CPTA_479MBFC
+       DA-UB-GDIFR   -> DA_UBDATE_479MBFR
+
+    3. Foreign key:
+       - FK column reuses exact referenced/master DB2 column name.
+       - No SET prefix is added to FK column names.
+       - Relationship/set name is metadata only.
+
+       Example:
+       Master PK: NR_CIOFMAS_479BSIC
+       Child FK : NR_CIOFMAS_479BSIC
+
+    4. Missing PK:
+       - If no primary key exists, create generated technical key:
+         ID_RECORD_<record-code>
+       - Type: CHAR(20)
     """
 
     TECHNICAL_KEY_DATATYPE = "CHAR(20)"
+
+    GENERIC_TRAILING_TOKENS = {
+        "SIC",
+        "FC",
+        "GDIFC",
+        "GDIFR",
+        "GDIFAR",
+        "GDIF",
+        "GDI",
+        "REC",
+        "RECORD",
+    }
+
+    PROJECT_ABBREVIATIONS = {
+        "FORM": "FM",
+        "EVPRCP": "ERCP",
+    }
+
+    DATE_TOKENS = {
+        "DATE",
+        "DT",
+        "DTE",
+        "DA",
+        "YYMMDD",
+        "YYYYMMDD",
+        "YMD",
+    }
+
+    YEAR_PARTS = {
+        "YEAR",
+        "YR",
+        "Y",
+        "YY",
+        "YYYY",
+        "DY",
+    }
+
+    MONTH_PARTS = {
+        "MONTH",
+        "MON",
+        "MO",
+        "M",
+        "MM",
+        "DM",
+    }
+
+    DAY_PARTS = {
+        "DAY",
+        "D",
+        "DD",
+    }
 
     def build_db2_model(
         self,
         schema: CanonicalSchema,
     ) -> DB2Model:
+        print("USING DB2MappingService.build_db2_model VERSION NAMING-FK-DATE-FIX-2026-07-29")
+
         tables: list[DB2Table] = []
 
         for record in getattr(schema, "records", []) or []:
@@ -64,14 +132,19 @@ class DB2MappingService:
                 record=record,
             )
 
-            table.primary_keys = [
-                self.normalize_column_name(
+            normalized_primary_keys = []
+
+            for primary_key in declared_primary_keys:
+                normalized_primary_key = self.normalize_column_name(
                     value=primary_key,
                     record_name=record_name,
+                    field=None,
                 )
-                for primary_key in declared_primary_keys
-                if primary_key
-            ]
+
+                if normalized_primary_key and normalized_primary_key not in normalized_primary_keys:
+                    normalized_primary_keys.append(normalized_primary_key)
+
+            table.primary_keys = normalized_primary_keys
 
             if table.primary_keys:
                 table.primary_key = table.primary_keys[0]
@@ -95,17 +168,16 @@ class DB2MappingService:
 
                 is_primary_key = column_name in table.primary_keys
 
-                table.columns.append(
-                    DB2Column(
-                        name=column_name,
-                        datatype=DB2DatatypeMapper.map(field),
-                        nullable=not is_primary_key,
-                        primary_key=is_primary_key,
-                        generated=False,
-                        source_kind="COBOL",
-                    )
+                column = DB2Column(
+                    name=column_name,
+                    datatype=DB2DatatypeMapper.map(field),
+                    nullable=not is_primary_key,
+                    primary_key=is_primary_key,
+                    generated=False,
+                    source_kind="COBOL",
                 )
 
+                table.columns.append(column)
                 added_columns.add(column_name)
 
             self.ensure_record_primary_key(
@@ -115,323 +187,53 @@ class DB2MappingService:
 
             tables.append(table)
 
-        set_relationships = self.collect_set_relationships(
+        model = DB2Model(
+            tables=tables,
+        )
+
+        self.apply_relationship_foreign_keys(
             schema=schema,
+            model=model,
         )
 
-        relationship_pairs = self.detect_relationship_pairs(
-            set_relationships=set_relationships,
-            tables=tables,
-        )
+        return model
 
-        self.add_foreign_keys_from_sets(
-            set_relationships=set_relationships,
-            tables=tables,
-            relationship_pairs=relationship_pairs,
-        )
-
-        return DB2Model(
-            tables=tables,
-        )
-
-    def get_record_primary_keys(
-        self,
-        record,
-    ) -> list[str]:
-        primary_keys: list[str] = []
-
-        explicit_primary_keys = getattr(record, "primary_keys", None)
-
-        if explicit_primary_keys:
-            if isinstance(explicit_primary_keys, list):
-                primary_keys.extend(explicit_primary_keys)
-            else:
-                primary_keys.append(str(explicit_primary_keys))
-
-        primary_key = getattr(record, "primary_key", None)
-
-        if primary_key:
-            primary_keys.append(primary_key)
-
-        cleaned: list[str] = []
-
-        for primary_key_value in primary_keys:
-            normalized = self.normalize_name(
-                value=primary_key_value,
-            )
-
-            if not normalized:
-                continue
-
-            if normalized in cleaned:
-                continue
-
-            cleaned.append(normalized)
-
-        return cleaned
-
-    def ensure_record_primary_key(
-        self,
-        table: DB2Table,
-        record_name: str,
-    ) -> list[DB2Column]:
-        primary_key_columns: list[DB2Column] = []
-
-        for primary_key_name in list(getattr(table, "primary_keys", []) or []):
-            column = self.find_column(
-                table=table,
-                column_name=primary_key_name,
-            )
-
-            if column is None:
-                continue
-
-            column.nullable = False
-            column.primary_key = True
-            primary_key_columns.append(column)
-
-        if primary_key_columns:
-            table.primary_keys = [
-                column.name
-                for column in primary_key_columns
-            ]
-            table.primary_key = table.primary_keys[0]
-            return primary_key_columns
-
-        generated_pk_name = self.generated_record_pk_name(
-            record_name=record_name or table.name,
-        )
-
-        existing_column = self.find_column(
-            table=table,
-            column_name=generated_pk_name,
-        )
-
-        if existing_column is not None:
-            existing_column.nullable = False
-            existing_column.primary_key = True
-            existing_column.generated = True
-            existing_column.source_kind = "GENERATED_PK"
-
-            table.primary_keys = [existing_column.name]
-            table.primary_key = existing_column.name
-
-            return [existing_column]
-
-        generated_column = DB2Column(
-            name=generated_pk_name,
-            datatype=self.TECHNICAL_KEY_DATATYPE,
-            nullable=False,
-            primary_key=True,
-            generated=True,
-            source_kind="GENERATED_PK",
-        )
-
-        table.columns.insert(
-            0,
-            generated_column,
-        )
-
-        table.primary_keys = [generated_column.name]
-        table.primary_key = generated_column.name
-
-        return [generated_column]
-
-    def generated_record_pk_name(
-        self,
-        record_name: str,
-    ) -> str:
-        normalized_record_name = self.normalize_table_name(
-            value=record_name,
-        )
-
-        return f"ID_RECORD_{normalized_record_name}"
-
-    def collect_set_relationships(
+    def apply_relationship_foreign_keys(
         self,
         schema: CanonicalSchema,
-    ) -> list[dict[str, str]]:
-        relationships: list[dict[str, str]] = []
-        seen: set[tuple[str, str, str]] = set()
-
-        for set_def in getattr(schema, "sets", []) or []:
-            set_name = self.normalize_name(
-                self.get_attr(set_def, "name")
-                or self.get_attr(set_def, "set_name")
-                or ""
-            )
-
-            owner_record = self.normalize_table_name(
-                self.get_attr(set_def, "owner_record")
-                or self.get_attr(set_def, "parent_record")
-                or self.get_attr(set_def, "owner")
-                or self.get_attr(set_def, "parent")
-                or ""
-            )
-
-            member_record = self.normalize_table_name(
-                self.get_attr(set_def, "member_record")
-                or self.get_attr(set_def, "child_record")
-                or self.get_attr(set_def, "member")
-                or self.get_attr(set_def, "child")
-                or ""
-            )
-
-            self.add_set_relationship_if_valid(
-                relationships=relationships,
-                seen=seen,
-                set_name=set_name,
-                owner_record=owner_record,
-                member_record=member_record,
-            )
+        model: DB2Model,
+    ) -> None:
+        table_lookup = self.build_table_lookup(
+            model=model,
+        )
 
         for relationship in getattr(schema, "relationships", []) or []:
-            set_name = self.normalize_name(
-                self.get_attr(relationship, "set_name")
-                or self.get_attr(relationship, "name")
-                or self.get_attr(relationship, "set")
-                or ""
+            set_name = self.get_relationship_set_name(
+                relationship=relationship,
             )
 
-            owner_record = self.normalize_table_name(
-                self.get_attr(relationship, "owner_record")
-                or self.get_attr(relationship, "parent_record")
-                or self.get_attr(relationship, "owner")
-                or self.get_attr(relationship, "parent")
-                or ""
+            owner_record = self.get_relationship_owner_record(
+                relationship=relationship,
             )
 
-            member_record = self.normalize_table_name(
-                self.get_attr(relationship, "member_record")
-                or self.get_attr(relationship, "child_record")
-                or self.get_attr(relationship, "member")
-                or self.get_attr(relationship, "child")
-                or ""
+            member_record = self.get_relationship_member_record(
+                relationship=relationship,
             )
 
-            self.add_set_relationship_if_valid(
-                relationships=relationships,
-                seen=seen,
-                set_name=set_name,
-                owner_record=owner_record,
-                member_record=member_record,
-            )
-
-        return relationships
-
-    def add_set_relationship_if_valid(
-        self,
-        relationships: list[dict[str, str]],
-        seen: set[tuple[str, str, str]],
-        set_name: str,
-        owner_record: str,
-        member_record: str,
-    ) -> None:
-        if not set_name:
-            return
-
-        if not owner_record:
-            return
-
-        if not member_record:
-            return
-
-        if set_name == "CALC":
-            return
-
-        key = (
-            set_name,
-            owner_record,
-            member_record,
-        )
-
-        if key in seen:
-            return
-
-        seen.add(key)
-
-        relationships.append(
-            {
-                "set_name": set_name,
-                "owner_record": owner_record,
-                "member_record": member_record,
-            }
-        )
-
-    def detect_relationship_pairs(
-        self,
-        set_relationships: list[dict[str, str]],
-        tables: list[DB2Table],
-    ) -> dict[tuple[str, str], set[str]]:
-        relationship_pairs: dict[tuple[str, str], set[str]] = defaultdict(set)
-
-        for relationship in set_relationships:
-            set_name = relationship.get("set_name", "")
-            owner_record = relationship.get("owner_record", "")
-            member_record = relationship.get("member_record", "")
-
-            owner_table = self.find_table(
-                tables=tables,
-                table_name=owner_record,
-            )
-
-            member_table = self.find_table(
-                tables=tables,
-                table_name=member_record,
-            )
-
-            if owner_table is None:
+            if not owner_record or not member_record:
                 continue
 
-            if member_table is None:
-                continue
-
-            if not set_name:
-                continue
-
-            relationship_pairs[
-                (
-                    owner_table.name,
-                    member_table.name,
-                )
-            ].add(set_name)
-
-        return relationship_pairs
-
-    def add_foreign_keys_from_sets(
-        self,
-        set_relationships: list[dict[str, str]],
-        tables: list[DB2Table],
-        relationship_pairs: dict[tuple[str, str], set[str]],
-    ) -> None:
-        for relationship in set_relationships:
-            set_name = relationship.get("set_name", "")
-            owner_record = relationship.get("owner_record", "")
-            member_record = relationship.get("member_record", "")
-
-            if not set_name:
-                continue
-
-            if not owner_record:
-                continue
-
-            if not member_record:
-                continue
-
-            owner_table = self.find_table(
-                tables=tables,
-                table_name=owner_record,
+            owner_table = self.find_table_for_record(
+                record_name=owner_record,
+                table_lookup=table_lookup,
             )
 
-            member_table = self.find_table(
-                tables=tables,
-                table_name=member_record,
+            member_table = self.find_table_for_record(
+                record_name=member_record,
+                table_lookup=table_lookup,
             )
 
-            if owner_table is None:
-                continue
-
-            if member_table is None:
+            if owner_table is None or member_table is None:
                 continue
 
             owner_pk_columns = self.get_primary_key_columns(
@@ -463,7 +265,7 @@ class DB2MappingService:
         child_table: DB2Table,
         parent_pk_column: DB2Column,
     ) -> DB2Column:
-        column_name = parent_pk_column.name
+        column_name = getattr(parent_pk_column, "name", "") or ""
 
         existing_column = self.find_column(
             table=child_table,
@@ -473,12 +275,17 @@ class DB2MappingService:
         if existing_column is not None:
             existing_column.nullable = True
             existing_column.generated = True
+            existing_column.primary_key = False
             existing_column.source_kind = "SET_FK"
+
+            if not getattr(existing_column, "datatype", None):
+                existing_column.datatype = getattr(parent_pk_column, "datatype", "") or ""
+
             return existing_column
 
         new_column = DB2Column(
             name=column_name,
-            datatype=parent_pk_column.datatype,
+            datatype=getattr(parent_pk_column, "datatype", "") or self.TECHNICAL_KEY_DATATYPE,
             nullable=True,
             primary_key=False,
             generated=True,
@@ -488,40 +295,6 @@ class DB2MappingService:
         child_table.columns.append(new_column)
 
         return new_column
-
-    def get_primary_key_columns(
-        self,
-        table: DB2Table,
-    ) -> list[DB2Column]:
-        primary_key_names = list(getattr(table, "primary_keys", []) or [])
-
-        if not primary_key_names and getattr(table, "primary_key", None):
-            primary_key_names = [table.primary_key]
-
-        if not primary_key_names:
-            primary_key_names = [
-                getattr(column, "name", "")
-                for column in getattr(table, "columns", []) or []
-                if getattr(column, "primary_key", False)
-            ]
-
-        columns: list[DB2Column] = []
-
-        for primary_key_name in primary_key_names:
-            column = self.find_column(
-                table=table,
-                column_name=primary_key_name,
-            )
-
-            if column is None:
-                continue
-
-            column.primary_key = True
-            column.nullable = False
-
-            columns.append(column)
-
-        return columns
 
     def add_foreign_key_if_missing(
         self,
@@ -556,104 +329,274 @@ class DB2MappingService:
         parent_column: str,
     ) -> bool:
         normalized_child_column = self.normalize_name(child_column)
-        normalized_parent_table = self.normalize_table_name(parent_table.name)
+        normalized_parent_table = self.normalize_name(parent_table.name)
         normalized_parent_column = self.normalize_name(parent_column)
 
-        for existing_fk in getattr(child_table, "foreign_keys", []) or []:
+        for foreign_key in getattr(child_table, "foreign_keys", []) or []:
+            existing_child_column = self.normalize_name(
+                getattr(foreign_key, "column_name", "") or ""
+            )
+            existing_parent_table = self.normalize_name(
+                getattr(foreign_key, "reference_table", "") or ""
+            )
+            existing_parent_column = self.normalize_name(
+                getattr(foreign_key, "reference_column", "") or ""
+            )
+
             if (
-                self.normalize_name(existing_fk.column_name)
-                == normalized_child_column
-                and self.normalize_table_name(existing_fk.reference_table)
-                == normalized_parent_table
-                and self.normalize_name(existing_fk.reference_column)
-                == normalized_parent_column
+                existing_child_column == normalized_child_column
+                and existing_parent_table == normalized_parent_table
+                and existing_parent_column == normalized_parent_column
             ):
                 return True
 
         return False
 
-    def find_table(
+    def ensure_record_primary_key(
         self,
-        tables: list[DB2Table],
-        table_name: str | None,
-    ) -> DB2Table | None:
-        normalized_name = self.normalize_table_name(table_name)
+        table: DB2Table,
+        record_name: str,
+    ) -> list[DB2Column]:
+        primary_key_columns: list[DB2Column] = []
 
-        if not normalized_name:
-            return None
+        for primary_key_name in list(getattr(table, "primary_keys", []) or []):
+            column = self.find_column(
+                table=table,
+                column_name=primary_key_name,
+            )
 
-        for table in tables:
-            table_normalized = self.normalize_table_name(table.name)
+            if column is None:
+                continue
 
-            if table_normalized == normalized_name:
-                return table
+            column.nullable = False
+            column.primary_key = True
 
-            if self.remove_numeric_suffix(table_normalized) == self.remove_numeric_suffix(normalized_name):
-                return table
+            if not getattr(column, "source_kind", ""):
+                column.source_kind = "COBOL"
 
-        return None
+            primary_key_columns.append(column)
+
+        if primary_key_columns:
+            table.primary_keys = [
+                column.name
+                for column in primary_key_columns
+            ]
+            table.primary_key = table.primary_keys[0]
+
+            return primary_key_columns
+
+        generated_pk_name = self.generated_primary_key_name(
+            record_name=record_name,
+        )
+
+        existing_generated = self.find_column(
+            table=table,
+            column_name=generated_pk_name,
+        )
+
+        if existing_generated is not None:
+            existing_generated.nullable = False
+            existing_generated.primary_key = True
+            existing_generated.generated = True
+            existing_generated.source_kind = "GENERATED PK"
+
+            table.primary_keys = [existing_generated.name]
+            table.primary_key = existing_generated.name
+
+            return [existing_generated]
+
+        generated_column = DB2Column(
+            name=generated_pk_name,
+            datatype=self.TECHNICAL_KEY_DATATYPE,
+            nullable=False,
+            primary_key=True,
+            generated=True,
+            source_kind="GENERATED PK",
+        )
+
+        table.columns.insert(0, generated_column)
+        table.primary_keys = [generated_column.name]
+        table.primary_key = generated_column.name
+
+        return [generated_column]
+
+    def generated_primary_key_name(
+        self,
+        record_name: str,
+    ) -> str:
+        record_code = self.record_code(record_name)
+
+        if record_code:
+            return f"ID_RECORD_{record_code}"
+
+        table_name = self.normalize_table_name(record_name)
+
+        if table_name:
+            return f"ID_RECORD_{table_name}"
+
+        return "ID_RECORD"
+
+    def get_primary_key_columns(
+        self,
+        table: DB2Table,
+    ) -> list[DB2Column]:
+        primary_key_names = list(getattr(table, "primary_keys", []) or [])
+
+        if not primary_key_names and getattr(table, "primary_key", None):
+            primary_key_names = [table.primary_key]
+
+        if not primary_key_names:
+            primary_key_names = [
+                getattr(column, "name", "") or ""
+                for column in getattr(table, "columns", []) or []
+                if getattr(column, "primary_key", False)
+            ]
+
+        result: list[DB2Column] = []
+
+        for primary_key_name in primary_key_names:
+            column = self.find_column(
+                table=table,
+                column_name=primary_key_name,
+            )
+
+            if column is not None:
+                result.append(column)
+
+        return result
 
     def find_column(
         self,
         table: DB2Table,
-        column_name: str | None,
+        column_name: str,
     ) -> DB2Column | None:
-        normalized_name = self.normalize_name(column_name)
+        normalized_column_name = self.normalize_name(column_name)
 
-        if not normalized_name:
+        if not normalized_column_name:
             return None
 
         for column in getattr(table, "columns", []) or []:
-            column_normalized = self.normalize_name(column.name)
+            current_name = self.normalize_name(
+                getattr(column, "name", "") or ""
+            )
 
-            if column_normalized == normalized_name:
+            if current_name == normalized_column_name:
                 return column
 
-            if self.remove_numeric_suffix(column_normalized) == self.remove_numeric_suffix(normalized_name):
-                return column
+        return None
+
+    def build_table_lookup(
+        self,
+        model: DB2Model,
+    ) -> dict[str, DB2Table]:
+        lookup: dict[str, DB2Table] = {}
+
+        for table in getattr(model, "tables", []) or []:
+            table_name = getattr(table, "name", "") or ""
+            normalized_table_name = self.normalize_name(table_name)
+
+            if normalized_table_name:
+                lookup[normalized_table_name] = table
+
+            suffix_removed = self.remove_record_suffix(
+                normalized_table_name,
+            )
+
+            if suffix_removed:
+                lookup[suffix_removed] = table
+
+        return lookup
+
+    def find_table_for_record(
+        self,
+        record_name: str,
+        table_lookup: dict[str, DB2Table],
+    ) -> DB2Table | None:
+        normalized_record_name = self.normalize_table_name(record_name)
+
+        if normalized_record_name in table_lookup:
+            return table_lookup[normalized_record_name]
+
+        suffix_removed = self.remove_record_suffix(
+            normalized_record_name,
+        )
+
+        if suffix_removed in table_lookup:
+            return table_lookup[suffix_removed]
+
+        for table_key, table in table_lookup.items():
+            if self.remove_record_suffix(table_key) == suffix_removed:
+                return table
 
         return None
 
     def normalize_table_name(
         self,
-        value,
+        value: str | None,
     ) -> str:
-        return self.normalize_name(value=value)
+        return self.to_db2_name(value or "")
 
     def normalize_column_name(
         self,
-        value,
-        record_name: str | None = None,
+        value: str | None,
+        record_name: str | None,
         field=None,
     ) -> str:
-        raw = self.normalize_name(value=value)
+        raw_value = str(value or "").strip()
 
-        if not raw:
+        if not raw_value:
             return ""
 
-        if raw.startswith("ID_RECORD_"):
-            return raw
+        if field is not None and self.is_date_field(field=field):
+            return self.date_column_name(
+                field_name=raw_value,
+                record_name=record_name,
+            )
 
-        if record_name:
-            if field is not None and self.is_date_field(field=field):
-                base = self.date_column_base_name(field_name=raw)
-            else:
-                base = self.legacy_column_base_name(field_name=raw)
+        return self.normal_business_column_name(
+            field_name=raw_value,
+            record_name=record_name,
+        )
 
-            record_code = self.record_code(record_name=record_name)
+    def normal_business_column_name(
+        self,
+        field_name: str,
+        record_name: str | None,
+    ) -> str:
+        base = self.business_field_base_name(
+            field_name=field_name,
+        )
 
-            if record_code:
-                return f"{base}_{record_code}"
+        record_code = self.record_code(record_name)
 
-        return raw
+        if record_code:
+            return f"{base}_479{record_code}"
 
-    def legacy_column_base_name(
+        return base
+
+    def date_column_name(
+        self,
+        field_name: str,
+        record_name: str | None,
+    ) -> str:
+        base = self.date_field_base_name(
+            field_name=field_name,
+        )
+
+        record_code = self.record_code(record_name)
+
+        if record_code:
+            return f"{base}_479{record_code}"
+
+        return base
+
+    def business_field_base_name(
         self,
         field_name: str,
     ) -> str:
-        normalized = self.normalize_name(field_name)
+        normalized = self.to_db2_name(field_name)
 
-        normalized = self.remove_numeric_suffix(normalized)
+        normalized = self.remove_record_suffix(normalized)
 
         parts = [
             part
@@ -661,20 +604,36 @@ class DB2MappingService:
             if part
         ]
 
-        if len(parts) >= 3:
-            parts = parts[:-1]
-
         if not parts:
             return normalized
 
-        return "_".join(parts)
+        parts = self.remove_generic_trailing_tokens(
+            parts=parts,
+        )
 
-    def date_column_base_name(
+        parts = [
+            self.PROJECT_ABBREVIATIONS.get(part, part)
+            for part in parts
+        ]
+
+        if len(parts) == 1:
+            return parts[0]
+
+        first = parts[0]
+        rest = "".join(parts[1:])
+
+        if rest:
+            return f"{first}_{rest}"
+
+        return first
+
+    def date_field_base_name(
         self,
         field_name: str,
     ) -> str:
-        normalized = self.normalize_name(field_name)
-        normalized = self.remove_numeric_suffix(normalized)
+        normalized = self.to_db2_name(field_name)
+
+        normalized = self.remove_record_suffix(normalized)
 
         parts = [
             part
@@ -686,134 +645,315 @@ class DB2MappingService:
             return normalized
 
         if parts[0] == "DA":
-            if len(parts) == 1:
-                return "DA_DATE"
-
             main_parts = parts[1:]
+        else:
+            main_parts = parts
 
-            if len(main_parts) >= 2:
-                main_parts = main_parts[:-1]
+        if not main_parts:
+            return "DA"
 
-            base = "_".join(main_parts)
+        if main_parts[0] in {"UB", "UE"}:
+            return f"DA_{main_parts[0]}DATE"
 
-            return f"DA_{base}" if base else "DA_DATE"
+        main_parts = self.apply_date_project_abbreviations(
+            parts=main_parts,
+        )
 
-        if "DATE" in parts:
-            cleaned_parts = [
-                part
-                for part in parts
-                if part != "DATE"
-            ]
+        main_parts = self.remove_generic_trailing_tokens(
+            parts=main_parts,
+        )
 
-            if cleaned_parts:
-                return f"DA_{self.compact_date_main_part(cleaned_parts)}"
+        if not main_parts:
+            return "DA"
 
-            return "DA_DATE"
+        if len(main_parts) == 1:
+            main = main_parts[0]
+        else:
+            main = "".join(main_parts)
 
-        return normalized
+        return f"DA_{main}"
 
-    def compact_date_main_part(
+    def apply_date_project_abbreviations(
         self,
         parts: list[str],
-    ) -> str:
-        return "_".join(parts)
+    ) -> list[str]:
+        output: list[str] = []
+
+        for part in parts:
+            if part == "EVPRCP":
+                output.append("ERCP")
+                continue
+
+            if part == "GDIFAR":
+                output.append("GD")
+                continue
+
+            if part in {"GDIFC", "GDIFR"}:
+                continue
+
+            output.append(
+                self.PROJECT_ABBREVIATIONS.get(part, part)
+            )
+
+        return output
+
+    def remove_generic_trailing_tokens(
+        self,
+        parts: list[str],
+    ) -> list[str]:
+        output = list(parts or [])
+
+        while output and output[-1] in self.GENERIC_TRAILING_TOKENS:
+            output.pop()
+
+        return output
 
     def record_code(
         self,
         record_name: str | None,
     ) -> str:
-        normalized = self.normalize_name(record_name)
-
-        compact = re.sub(
-            r"[^A-Z0-9]",
-            "",
-            normalized,
-        )
+        normalized = self.to_db2_name(record_name or "")
+        compact = re.sub(r"[^A-Z0-9]", "", normalized)
 
         if not compact:
             return ""
 
-        suffix = compact[-4:]
+        if len(compact) <= 4:
+            return compact
 
-        return f"479{suffix}"
+        return compact[-4:]
 
     def is_date_field(
         self,
         field,
     ) -> bool:
         datatype = str(
-            getattr(field, "datatype", "") or ""
-        ).upper()
+            getattr(field, "datatype", None)
+            or getattr(field, "data_type", None)
+            or getattr(field, "type", None)
+            or "",
+        ).strip().upper()
 
         basetype = str(
-            getattr(field, "basetype", "") or ""
-        ).upper()
-
-        field_name = self.normalize_name(
-            getattr(field, "name", "") or ""
-        )
+            getattr(field, "basetype", None)
+            or getattr(field, "base_type", None)
+            or "",
+        ).strip().upper()
 
         if datatype == "DATE" or basetype == "DATE":
             return True
 
-        if field_name.endswith("_DATE"):
-            return True
+        field_name = getattr(field, "name", "") or ""
 
-        if "_DATE_" in field_name:
-            return True
+        if self.is_date_like_name(field_name):
+            picture = str(
+                getattr(field, "picture", None)
+                or getattr(field, "pic", None)
+                or getattr(field, "pic_clause", None)
+                or "",
+            ).strip()
 
-        parts = [
-            part
-            for part in field_name.split("_")
-            if part
-        ]
-
-        if parts and parts[0] == "DA":
-            return True
+            if self.is_yyyymmdd_picture(picture):
+                return True
 
         return False
 
+    def is_yyyymmdd_picture(
+        self,
+        picture: str,
+    ) -> bool:
+        if not picture:
+            return False
+
+        clean = DB2DatatypeMapper.clean_picture(
+            picture=picture,
+        )
+        core = DB2DatatypeMapper.picture_core(
+            picture=clean,
+        )
+
+        return core in {
+            "9(8)",
+            "S9(8)",
+            "99999999",
+            "S99999999",
+        }
+
+    def is_date_like_name(
+        self,
+        value: str,
+    ) -> bool:
+        parts = self.name_parts(value)
+
+        if not parts:
+            return False
+
+        if parts[0] == "DA":
+            return True
+
+        if any(part in self.DATE_TOKENS for part in parts):
+            return True
+
+        compact = "".join(parts)
+
+        return any(token in compact for token in self.DATE_TOKENS)
+
+    def is_date_part_name(
+        self,
+        value: str,
+    ) -> bool:
+        parts = self.name_parts(value)
+
+        for part in parts:
+            if part in self.YEAR_PARTS:
+                return True
+
+            if part in self.MONTH_PARTS:
+                return True
+
+            if part in self.DAY_PARTS:
+                return True
+
+        return False
+
+    def get_record_primary_keys(
+        self,
+        record,
+    ) -> list[str]:
+        primary_keys: list[str] = []
+
+        explicit_primary_keys = getattr(record, "primary_keys", None)
+
+        if explicit_primary_keys:
+            if isinstance(explicit_primary_keys, list):
+                primary_keys.extend(explicit_primary_keys)
+            else:
+                primary_keys.append(explicit_primary_keys)
+
+        primary_key = getattr(record, "primary_key", None)
+
+        if primary_key:
+            primary_keys.append(primary_key)
+
+        cleaned: list[str] = []
+
+        for primary_key_value in primary_keys:
+            normalized = self.normalize_name(
+                primary_key_value,
+            )
+
+            if not normalized:
+                continue
+
+            if normalized in cleaned:
+                continue
+
+            cleaned.append(normalized)
+
+        return cleaned
+
+    def get_relationship_set_name(
+        self,
+        relationship,
+    ) -> str:
+        if isinstance(relationship, dict):
+            return str(
+                relationship.get("set_name")
+                or relationship.get("set")
+                or relationship.get("name")
+                or "",
+            )
+
+        return str(
+            getattr(relationship, "set_name", None)
+            or getattr(relationship, "set", None)
+            or getattr(relationship, "name", None)
+            or "",
+        )
+
+    def get_relationship_owner_record(
+        self,
+        relationship,
+    ) -> str:
+        if isinstance(relationship, dict):
+            return str(
+                relationship.get("owner_record")
+                or relationship.get("parent_record")
+                or relationship.get("owner")
+                or relationship.get("parent")
+                or "",
+            )
+
+        return str(
+            getattr(relationship, "owner_record", None)
+            or getattr(relationship, "parent_record", None)
+            or getattr(relationship, "owner", None)
+            or getattr(relationship, "parent", None)
+            or "",
+        )
+
+    def get_relationship_member_record(
+        self,
+        relationship,
+    ) -> str:
+        if isinstance(relationship, dict):
+            return str(
+                relationship.get("member_record")
+                or relationship.get("child_record")
+                or relationship.get("member")
+                or relationship.get("child")
+                or "",
+            )
+
+        return str(
+            getattr(relationship, "member_record", None)
+            or getattr(relationship, "child_record", None)
+            or getattr(relationship, "member", None)
+            or getattr(relationship, "child", None)
+            or "",
+        )
+
     def normalize_name(
         self,
-        value,
+        value: str | None,
+    ) -> str:
+        return self.to_db2_name(value or "")
+
+    def to_db2_name(
+        self,
+        value: str | None,
     ) -> str:
         text = str(value or "").strip().upper()
 
-        if not text:
-            return ""
+        text = text.replace("\u00a0", " ")
+        text = text.replace("\t", " ")
 
-        text = text.replace("-", "_")
-        text = text.replace(" ", "_")
-        text = re.sub(r"[^A-Z0-9_]", "_", text)
+        text = re.sub(r"[^A-Z0-9]+", "_", text)
         text = re.sub(r"_+", "_", text)
         text = text.strip("_")
 
         return text
 
-    def remove_numeric_suffix(
+    def name_parts(
         self,
-        value: str,
+        value: str | None,
+    ) -> list[str]:
+        normalized = self.to_db2_name(value or "")
+
+        return [
+            part
+            for part in normalized.split("_")
+            if part
+        ]
+
+    def remove_record_suffix(
+        self,
+        name: str | None,
     ) -> str:
-        text = self.normalize_name(value)
+        value = str(name or "").strip().upper()
 
-        if not text:
-            return ""
+        value = re.sub(r"[_\-\s]+[0-9]{4}$", "", value)
+        value = re.sub(r"[0-9]{4}$", "", value)
+        value = re.sub(r"[_\-\s]+$", "", value)
 
-        return re.sub(
-            r"_[0-9]{4}$",
-            "",
-            text,
-        )
-
-    def get_attr(
-        self,
-        source,
-        name: str,
-    ):
-        if source is None:
-            return None
-
-        if isinstance(source, dict):
-            return source.get(name)
-
-        return getattr(source, name, None)
+        return value

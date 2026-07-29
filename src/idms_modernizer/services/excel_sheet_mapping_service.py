@@ -10,23 +10,20 @@ from idms_modernizer.services.name_normalizer import NameNormalizer
 from idms_modernizer.services.db2_datatype_mapper import DB2DatatypeMapper
 
 
-print("LOADED ExcelSheetMappingService VERSION PIC-MANUAL-PARSER-FIX-2026-07-29")
+print("LOADED ExcelSheetMappingService VERSION DATE-FK-NAMING-FIX-2026-07-29")
 
 
 class ExcelSheetMappingService:
     """
     Builds Excel Sheet Mapping rows.
 
-    Critical rule:
-    New DB2 Data Type is always calculated from IDMS PIC Clause when PIC exists.
-
-    Required mapping:
-    - PIC X(n) -> CHAR(n)
-    - PIC 9(n) -> DECIMAL(n)
-    - PIC 9(n) COMP-3 -> DECIMAL(n,0)
-    - PIC S9(n) COMP-3 -> DECIMAL(n,0)
-    - PIC S9(n)V9(m) COMP-3 -> DECIMAL(n+m,m)
-    - DATE fields -> DATE
+    Rules fixed here:
+    - Outer date group/single date field maps to one DB2 DATE column.
+    - Inner date parts remain visible but DB2 mapping stays blank.
+    - DB2 date field name keeps DA prefix and appends _479<record-code>.
+    - FK rows reuse referenced/master DB2 column name.
+    - Relationship name does not affect DB2 FK field name.
+    - Sheet datatype is calculated directly from IDMS PIC Clause.
     """
 
     COLUMNS = [
@@ -83,12 +80,14 @@ class ExcelSheetMappingService:
         "YMD",
     }
 
+    DATE_CHILD_TOKENS = YEAR_PARTS | MONTH_PARTS | DAY_PARTS
+
     def build(
         self,
         metadata: SchemaMetadata,
         db2_model: DB2Model,
     ) -> list[dict[str, str]]:
-        print("USING ExcelSheetMappingService.build VERSION PIC-MANUAL-PARSER-FIX-2026-07-29")
+        print("USING ExcelSheetMappingService.build VERSION DATE-FK-NAMING-FIX-2026-07-29")
 
         rows: list[dict[str, str]] = []
 
@@ -157,378 +156,40 @@ class ExcelSheetMappingService:
             rows=rows,
         )
 
-        self.debug_bad_rows_after_force(
-            rows=rows,
-        )
-
         return rows
 
     def force_pic_based_datatypes(
         self,
         rows: list[dict[str, str]],
     ) -> list[dict[str, str]]:
-        print("USING force_pic_based_datatypes VERSION PIC-MANUAL-PARSER-FIX-2026-07-29")
-
         corrected_rows: list[dict[str, str]] = []
-
-        total_pic_rows = 0
-        total_corrected_rows = 0
-        total_date_rows = 0
-        total_unmapped_pic_rows = 0
-        total_skipped_blank_db2_target = 0
-
-        for index, row in enumerate(rows or []):
-            pic_clause = str(row.get("IDMS PIC Clause", "") or "").strip()
-            current_db2_type = str(row.get("New DB2 Data Type", "") or "").strip()
-            basetype = str(row.get("Basetype", "") or "").strip().upper()
-            cobol_zone = str(row.get("Cobol Zone", "") or "").strip()
-            db2_field_name = str(row.get("New DB2 Field name", "") or "").strip()
-            new_db2_record = str(row.get("New DB2 Record", "") or "").strip()
-
-            if not pic_clause:
-                corrected_rows.append(row)
-                continue
-
-            total_pic_rows += 1
-
-            if basetype == "DATE" or current_db2_type.upper() == "DATE":
-                row["New DB2 Data Type"] = "DATE"
-                total_date_rows += 1
-                corrected_rows.append(row)
-                continue
-
-            if not new_db2_record or not db2_field_name:
-                total_skipped_blank_db2_target += 1
-                corrected_rows.append(row)
-                continue
-
-            mapped_type = self.map_idms_pic_to_db2_datatype(
-                pic_clause=pic_clause,
-                cobol_zone=cobol_zone,
-                basetype=basetype,
-            )
-
-            if mapped_type:
-                row["New DB2 Data Type"] = mapped_type
-                total_corrected_rows += 1
-            else:
-                total_unmapped_pic_rows += 1
-
-            corrected_rows.append(row)
-
-        print(
-            "PIC_DEBUG_SUMMARY "
-            f"total_rows={len(rows or [])} "
-            f"total_pic_rows={total_pic_rows} "
-            f"total_corrected_rows={total_corrected_rows} "
-            f"total_date_rows={total_date_rows} "
-            f"total_skipped_blank_db2_target={total_skipped_blank_db2_target} "
-            f"total_unmapped_pic_rows={total_unmapped_pic_rows}"
-        )
-
-        return corrected_rows
-
-    def debug_bad_rows_after_force(
-        self,
-        rows: list[dict[str, str]],
-    ) -> None:
-        bad_rows = []
 
         for row in rows or []:
             pic_clause = str(row.get("IDMS PIC Clause", "") or "").strip()
-            db2_type = str(row.get("New DB2 Data Type", "") or "").strip()
+            basetype = str(row.get("Basetype", "") or "").strip().upper()
             db2_record = str(row.get("New DB2 Record", "") or "").strip()
             db2_field = str(row.get("New DB2 Field name", "") or "").strip()
-            basetype = str(row.get("Basetype", "") or "").strip().upper()
-            cobol_zone = str(row.get("Cobol Zone", "") or "")
+            current_type = str(row.get("New DB2 Data Type", "") or "").strip().upper()
 
-            if not pic_clause:
+            if current_type == "DATE" or basetype == "DATE":
+                if db2_record and db2_field:
+                    row["New DB2 Data Type"] = "DATE"
+                corrected_rows.append(row)
                 continue
 
-            if not db2_record or not db2_field:
-                continue
-
-            if basetype == "DATE" or db2_type.upper() == "DATE":
-                continue
-
-            expected = self.map_idms_pic_to_db2_datatype(
-                pic_clause=pic_clause,
-                cobol_zone=cobol_zone,
-                basetype=basetype,
-            )
-
-            if expected and expected != db2_type:
-                bad_rows.append(
-                    {
-                        "Cobol Zone": row.get("Cobol Zone", ""),
-                        "PIC": pic_clause,
-                        "Expected": expected,
-                        "Actual": db2_type,
-                    }
+            if pic_clause and db2_record and db2_field:
+                mapped = DB2DatatypeMapper.map_picture(
+                    picture=pic_clause,
+                    fallback_length=None,
+                    fallback_scale=None,
                 )
 
-        print(f"PIC_DEBUG_AFTER_FORCE_BAD_ROWS_COUNT={len(bad_rows)}")
+                if mapped:
+                    row["New DB2 Data Type"] = mapped
 
-        for bad_row in bad_rows[:100]:
-            print(f"PIC_DEBUG_BAD_ROW {bad_row}")
+            corrected_rows.append(row)
 
-    def map_idms_pic_to_db2_datatype(
-        self,
-        pic_clause: str,
-        cobol_zone: str = "",
-        basetype: str = "",
-    ) -> str:
-        if not pic_clause:
-            return ""
-
-        if str(basetype or "").upper() == "DATE":
-            return "DATE"
-
-        if self.is_date_like_name(cobol_zone) and self.is_yyyymmdd_picture(pic_clause):
-            return "DATE"
-
-        clean = self.clean_pic_clause(
-            pic_clause=pic_clause,
-        )
-
-        if not clean:
-            return ""
-
-        has_comp3 = "COMP-3" in clean
-        has_comp = bool(re.search(r"\bCOMP\b", clean)) and not has_comp3
-
-        core = clean
-        core = core.replace("COMP-3", "")
-        core = re.sub(r"\bCOMP\b", "", core)
-        core = core.replace("DISPLAY", "")
-        core = core.replace("USAGE", "")
-        core = core.replace("IS", "")
-        core = re.sub(r"\s+", "", core)
-
-        if self.is_x_picture(core):
-            length = self.character_length_from_core(
-                core=core,
-            )
-
-            if length > 0:
-                return f"CHAR({length})"
-
-        if "V" in core and "9" in core:
-            precision, scale = self.precision_scale_from_picture_core(
-                core=core,
-            )
-            return f"DECIMAL({precision},{scale})"
-
-        if "9" in core:
-            precision = self.precision_from_picture_core(
-                core=core,
-            )
-
-            if has_comp3 or has_comp:
-                return f"DECIMAL({precision},0)"
-
-            return f"DECIMAL({precision})"
-
-        return ""
-
-    def clean_pic_clause(
-        self,
-        pic_clause: str,
-    ) -> str:
-        text = str(pic_clause or "").strip().upper()
-
-        text = text.replace("PICTURE", "")
-        text = text.replace("PIC", "")
-        text = text.replace(".", "")
-        text = text.replace("\u00a0", " ")
-        text = text.replace("\t", " ")
-
-        text = re.sub(r"\s+", " ", text).strip()
-
-        text = text.replace(" (", "(")
-        text = text.replace("( ", "(")
-        text = text.replace(" )", ")")
-        text = text.replace(") ", ") ")
-
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
-
-    def is_x_picture(
-        self,
-        core: str,
-    ) -> bool:
-        text = str(core or "").strip().upper()
-
-        if text.startswith("X(") and text.endswith(")"):
-            return self.extract_parenthesized_int(text) is not None
-
-        if text and set(text) == {"X"}:
-            return True
-
-        return False
-
-    def character_length_from_core(
-        self,
-        core: str,
-    ) -> int:
-        text = str(core or "").strip().upper()
-
-        if text.startswith("X(") and text.endswith(")"):
-            parsed_length = self.extract_parenthesized_int(text)
-
-            if parsed_length is not None:
-                return parsed_length
-
-        if text and set(text) == {"X"}:
-            return len(text)
-
-        return 0
-
-    def precision_scale_from_picture_core(
-        self,
-        core: str,
-    ) -> tuple[int, int]:
-        text = str(core or "").strip().upper()
-
-        if text.startswith("S"):
-            text = text[1:]
-
-        if "V" not in text:
-            precision = self.precision_from_picture_core(
-                core=text,
-            )
-            return precision, 0
-
-        before_v, after_v = text.split("V", 1)
-
-        integer_digits = self.count_9_digits(
-            value=before_v,
-        )
-        decimal_digits = self.count_9_digits(
-            value=after_v,
-        )
-
-        return integer_digits + decimal_digits, decimal_digits
-
-    def precision_from_picture_core(
-        self,
-        core: str,
-    ) -> int:
-        text = str(core or "").strip().upper()
-
-        if text.startswith("S"):
-            text = text[1:]
-
-        if "V" in text:
-            before_v, after_v = text.split("V", 1)
-
-            return self.count_9_digits(
-                value=before_v,
-            ) + self.count_9_digits(
-                value=after_v,
-            )
-
-        return self.count_9_digits(
-            value=text,
-        )
-
-    def count_9_digits(
-        self,
-        value: str,
-    ) -> int:
-        text = str(value or "").strip().upper()
-
-        if text.startswith("S"):
-            text = text[1:]
-
-        total = 0
-        index = 0
-
-        while index < len(text):
-            char = text[index]
-
-            if char != "9":
-                index += 1
-                continue
-
-            if index + 1 < len(text) and text[index + 1] == "(":
-                close_index = text.find(")", index + 2)
-
-                if close_index != -1:
-                    number_text = text[index + 2:close_index].strip()
-
-                    if number_text.isdigit():
-                        total += int(number_text)
-                        index = close_index + 1
-                        continue
-
-            total += 1
-            index += 1
-
-        return total
-
-    def extract_parenthesized_int(
-        self,
-        value: str,
-    ) -> int | None:
-        text = str(value or "").strip()
-
-        open_index = text.find("(")
-
-        if open_index == -1:
-            return None
-
-        close_index = text.find(")", open_index + 1)
-
-        if close_index == -1:
-            return None
-
-        number_text = text[open_index + 1:close_index].strip()
-
-        if not number_text.isdigit():
-            return None
-
-        return int(number_text)
-
-    def is_yyyymmdd_picture(
-        self,
-        pic_clause: str,
-    ) -> bool:
-        clean = self.clean_pic_clause(
-            pic_clause=pic_clause,
-        )
-
-        core = clean
-        core = core.replace("COMP-3", "")
-        core = re.sub(r"\bCOMP\b", "", core)
-        core = core.replace("DISPLAY", "")
-        core = re.sub(r"\s+", "", core)
-
-        return core in {
-            "9(8)",
-            "S9(8)",
-            "99999999",
-            "S99999999",
-        }
-
-    def is_date_like_name(
-        self,
-        value: str,
-    ) -> bool:
-        text = self.to_db2_name(value or "")
-        parts = [
-            part
-            for part in text.split("_")
-            if part
-        ]
-
-        if any(part in self.DATE_TOKENS for part in parts):
-            return True
-
-        compact = "".join(parts)
-
-        return any(token in compact for token in self.DATE_TOKENS)
+        return corrected_rows
 
     def build_table_lookup(
         self,
@@ -564,12 +225,38 @@ class ExcelSheetMappingService:
             )
 
             if owner_record and set_name:
-                lookup[NameNormalizer.normalize(owner_record)] = set_name
+                normalized_owner = NameNormalizer.normalize(owner_record)
+                existing = lookup.get(normalized_owner, "")
+                lookup[normalized_owner] = self.append_relation(existing, set_name)
 
             if member_record and set_name:
-                lookup[NameNormalizer.normalize(member_record)] = set_name
+                normalized_member = NameNormalizer.normalize(member_record)
+                existing = lookup.get(normalized_member, "")
+                lookup[normalized_member] = self.append_relation(existing, set_name)
 
         return lookup
+
+    def append_relation(
+        self,
+        existing: str,
+        set_name: str,
+    ) -> str:
+        existing = str(existing or "").strip()
+        set_name = str(set_name or "").strip()
+
+        if not existing:
+            return set_name
+
+        parts = [
+            part.strip()
+            for part in existing.split(";")
+            if part.strip()
+        ]
+
+        if set_name not in parts:
+            parts.append(set_name)
+
+        return "; ".join(parts)
 
     def has_level_01_row(
         self,
@@ -646,7 +333,6 @@ class ExcelSheetMappingService:
         )
 
         calc_scope = self.build_calc_scope(
-            record=record,
             fields=mapping_fields,
         )
 
@@ -674,15 +360,11 @@ class ExcelSheetMappingService:
                 date_scope=date_scope,
             )
 
-            is_direct_date = self.is_date_field(
+            is_direct_date = self.is_direct_date_field(
                 field=field,
             )
 
-            is_date = (
-                is_outer_date
-                or is_date_child
-                or is_direct_date
-            )
+            is_date = is_outer_date or is_date_child or is_direct_date
 
             calc_status = calc_scope.get(
                 id(field),
@@ -741,6 +423,7 @@ class ExcelSheetMappingService:
                     field=field,
                 )
                 row["New DB2 Data Type"] = "DATE"
+                row["DB2 Key"] = ""
 
             elif is_date_child:
                 row["New DB2 Record"] = ""
@@ -775,21 +458,18 @@ class ExcelSheetMappingService:
                     record=record,
                     table=table,
                 )
-                row["New DB2 Field name"] = self.convert_cobol_zone_to_db2_field_name(
-                    record=record,
-                    field=field,
-                )
 
-                if pic_clause:
-                    row["New DB2 Data Type"] = self.map_idms_pic_to_db2_datatype(
-                        pic_clause=pic_clause,
-                        cobol_zone=row["Cobol Zone"],
-                        basetype=self.get_field_basetype(field=field),
-                    )
+                if db2_column is not None and getattr(db2_column, "name", None):
+                    row["New DB2 Field name"] = getattr(db2_column, "name", "") or ""
                 else:
-                    row["New DB2 Data Type"] = self.infer_db2_datatype_from_field(
+                    row["New DB2 Field name"] = self.convert_cobol_zone_to_db2_field_name(
+                        record=record,
                         field=field,
                     )
+
+                row["New DB2 Data Type"] = self.infer_db2_datatype_from_field(
+                    field=field,
+                )
 
             row["Hopex Expression TypeRemark"] = self.hopex_remark(
                 field=field,
@@ -847,7 +527,7 @@ class ExcelSheetMappingService:
             if active_date_levels:
                 scope[id(field)] = True
 
-            if self.is_potential_date_group(field=field):
+            if self.is_potential_outer_date(field=field):
                 active_date_levels.append(level)
 
         return scope
@@ -858,11 +538,18 @@ class ExcelSheetMappingService:
     ) -> dict[str, dict]:
         info: dict[str, dict] = {}
 
-        for field in fields or []:
+        for index, field in enumerate(fields or []):
             if not self.is_group_field(field=field):
                 continue
 
-            if not self.is_potential_date_group(field=field):
+            if not self.is_potential_outer_date(field=field):
+                continue
+
+            if not self.group_has_ymd_children(
+                field=field,
+                fields=fields,
+                start_index=index,
+            ):
                 continue
 
             field_name = NameNormalizer.normalize(
@@ -874,16 +561,50 @@ class ExcelSheetMappingService:
 
             info[field_name] = {
                 "field": field,
-                "db2_field_name": self.to_db2_name(
-                    self.remove_record_suffix(field_name),
-                ),
             }
 
         return info
 
+    def group_has_ymd_children(
+        self,
+        field,
+        fields,
+        start_index: int,
+    ) -> bool:
+        parent_level = self.safe_int(
+            getattr(field, "level", None),
+            default=0,
+        )
+
+        found_year = False
+        found_month = False
+        found_day = False
+
+        for child in list(fields or [])[start_index + 1:]:
+            child_level = self.safe_int(
+                getattr(child, "level", None),
+                default=0,
+            )
+
+            if child_level <= parent_level:
+                break
+
+            child_name = getattr(child, "name", "") or ""
+            parts = self.name_parts(child_name)
+
+            if any(part in self.YEAR_PARTS for part in parts):
+                found_year = True
+
+            if any(part in self.MONTH_PARTS for part in parts):
+                found_month = True
+
+            if any(part in self.DAY_PARTS for part in parts):
+                found_day = True
+
+        return found_year and found_month and found_day
+
     def build_calc_scope(
         self,
-        record,
         fields,
     ) -> dict[int, str]:
         scope: dict[int, str] = {}
@@ -948,18 +669,7 @@ class ExcelSheetMappingService:
             field_name=getattr(field, "name", "") or "",
         )
 
-    def is_potential_date_group(
-        self,
-        field,
-    ) -> bool:
-        if self.is_date_field(field=field):
-            return True
-
-        return self.is_date_like_name(
-            getattr(field, "name", "") or "",
-        )
-
-    def is_date_field(
+    def is_direct_date_field(
         self,
         field,
     ) -> bool:
@@ -970,16 +680,47 @@ class ExcelSheetMappingService:
             or "",
         ).strip().upper()
 
-        if datatype == "DATE":
-            return True
+        basetype = str(
+            getattr(field, "basetype", None)
+            or getattr(field, "base_type", None)
+            or "",
+        ).strip().upper()
 
-        field_name = getattr(field, "name", "") or ""
+        if datatype == "DATE" or basetype == "DATE":
+            return not self.is_date_part_name(
+                field_name=getattr(field, "name", "") or "",
+            )
+
         pic_clause = self.get_field_picture(field=field)
 
-        if self.is_date_like_name(field_name) and self.is_yyyymmdd_picture(pic_clause):
+        if self.is_date_like_name(getattr(field, "name", "") or "") and self.is_yyyymmdd_picture(pic_clause):
             return True
 
         return False
+
+    def is_potential_outer_date(
+        self,
+        field,
+    ) -> bool:
+        field_name = getattr(field, "name", "") or ""
+
+        if self.is_date_like_name(field_name):
+            return True
+
+        datatype = str(
+            getattr(field, "datatype", None)
+            or getattr(field, "data_type", None)
+            or getattr(field, "type", None)
+            or "",
+        ).strip().upper()
+
+        basetype = str(
+            getattr(field, "basetype", None)
+            or getattr(field, "base_type", None)
+            or "",
+        ).strip().upper()
+
+        return datatype == "DATE" or basetype == "DATE"
 
     def is_date_part_name(
         self,
@@ -988,14 +729,45 @@ class ExcelSheetMappingService:
         parts = self.name_parts(field_name or "")
 
         for part in parts:
-            if part in self.YEAR_PARTS:
-                return True
-            if part in self.MONTH_PARTS:
-                return True
-            if part in self.DAY_PARTS:
+            if part in self.DATE_CHILD_TOKENS:
                 return True
 
         return False
+
+    def is_yyyymmdd_picture(
+        self,
+        pic_clause: str,
+    ) -> bool:
+        clean = DB2DatatypeMapper.clean_picture(pic_clause)
+        core = DB2DatatypeMapper.picture_core(clean)
+
+        return core in {
+            "9(8)",
+            "S9(8)",
+            "99999999",
+            "S99999999",
+        }
+
+    def is_date_like_name(
+        self,
+        value: str,
+    ) -> bool:
+        text = self.to_db2_name(value or "")
+        parts = [
+            part
+            for part in text.split("_")
+            if part
+        ]
+
+        if any(part in self.DATE_TOKENS for part in parts):
+            return True
+
+        if parts and parts[0] == "DA":
+            return True
+
+        compact = "".join(parts)
+
+        return any(token in compact for token in self.DATE_TOKENS)
 
     def find_table_for_record(
         self,
@@ -1299,25 +1071,10 @@ class ExcelSheetMappingService:
             if owner_pk_column is None:
                 continue
 
-            fk_column = self.find_existing_fk_column_for_set(
-                member_table=member_table,
-                set_name=set_name,
-                owner_pk_column=owner_pk_column,
+            fk_column_name = getattr(owner_pk_column, "name", "") or ""
+            fk_datatype = self.get_db2_datatype(
+                db2_column=owner_pk_column,
             )
-
-            if fk_column is not None:
-                fk_column_name = getattr(fk_column, "name", "") or ""
-                fk_datatype = self.get_db2_datatype(
-                    db2_column=fk_column,
-                )
-            else:
-                fk_column_name = self.generated_set_fk_column_name(
-                    set_name=set_name,
-                    owner_pk_column_name=getattr(owner_pk_column, "name", "") or "",
-                )
-                fk_datatype = self.get_db2_datatype(
-                    db2_column=owner_pk_column,
-                )
 
             key = (
                 NameNormalizer.normalize(cobol_record_name),
@@ -1342,37 +1099,6 @@ class ExcelSheetMappingService:
             rows.append(row)
 
         return rows
-
-    def find_existing_fk_column_for_set(
-        self,
-        member_table: DB2Table,
-        set_name: str,
-        owner_pk_column: DB2Column,
-    ) -> DB2Column | None:
-        owner_pk_name = NameNormalizer.normalize(
-            getattr(owner_pk_column, "name", "") or "",
-        )
-        set_name_normalized = NameNormalizer.normalize(set_name or "")
-
-        for column in getattr(member_table, "columns", []) or []:
-            column_name = NameNormalizer.normalize(
-                getattr(column, "name", "") or "",
-            )
-
-            source_kind = str(
-                getattr(column, "source_kind", "") or "",
-            ).upper()
-
-            if source_kind in {"FK", "FOREIGN KEY", "SET FK"}:
-                return column
-
-            if owner_pk_name and owner_pk_name in column_name:
-                return column
-
-            if set_name_normalized and set_name_normalized in column_name:
-                return column
-
-        return None
 
     def find_primary_key_column(
         self,
@@ -1407,19 +1133,14 @@ class ExcelSheetMappingService:
             if db2_key == "PK":
                 return column
 
+            source_kind = str(getattr(column, "source_kind", "") or "").upper()
+
+            if source_kind in {"GENERATED PK", "PK"}:
+                return column
+
         columns = list(getattr(table, "columns", []) or [])
 
         return columns[0] if columns else None
-
-    def generated_set_fk_column_name(
-        self,
-        set_name: str,
-        owner_pk_column_name: str,
-    ) -> str:
-        set_base = self.to_db2_name(set_name or "SET")
-        pk_base = self.to_db2_name(owner_pk_column_name or "ID")
-
-        return f"FK_{set_base}_{pk_base}"
 
     def get_foreign_key_column_name(
         self,
@@ -1503,10 +1224,10 @@ class ExcelSheetMappingService:
         )
 
         if pic_clause:
-            return self.map_idms_pic_to_db2_datatype(
-                pic_clause=pic_clause,
-                cobol_zone=self.format_cobol_zone(field=field),
-                basetype=self.get_field_basetype(field=field),
+            return DB2DatatypeMapper.map_picture(
+                picture=pic_clause,
+                fallback_length=None,
+                fallback_scale=getattr(field, "scale", None),
             )
 
         datatype = str(
@@ -1687,10 +1408,12 @@ class ExcelSheetMappingService:
         if self.is_filler_field(field=field):
             return False
 
-        if self.is_date_field(field=field):
+        if self.is_group_field(field=field):
             return False
 
-        if self.is_group_field(field=field):
+        if self.is_date_part_name(
+            field_name=getattr(field, "name", "") or "",
+        ):
             return False
 
         picture = self.get_field_picture(field=field)
@@ -1742,10 +1465,13 @@ class ExcelSheetMappingService:
         field,
     ) -> str:
         field_name = getattr(field, "name", "") or ""
+        base = self.cobol_field_base_name(field_name=field_name)
+        record_code = self.record_code(record_name=getattr(record, "name", "") or "")
 
-        return self.cobol_field_base_name(
-            field_name=field_name,
-        )
+        if record_code:
+            return f"{base}_479{record_code}"
+
+        return base
 
     def convert_date_field_to_db2_field_name(
         self,
@@ -1753,10 +1479,13 @@ class ExcelSheetMappingService:
         field,
     ) -> str:
         field_name = getattr(field, "name", "") or ""
+        record_code = self.record_code(record_name=getattr(record, "name", "") or "")
+        base = self.date_field_base_name(field_name=field_name)
 
-        return self.date_field_base_name(
-            field_name=field_name,
-        )
+        if record_code:
+            return f"{base}_479{record_code}"
+
+        return base
 
     def cobol_field_base_name(
         self,
@@ -1783,6 +1512,52 @@ class ExcelSheetMappingService:
             "",
             normalized,
         )
+
+        parts = [
+            part
+            for part in normalized.split("_")
+            if part
+        ]
+
+        if not parts:
+            return normalized
+
+        if parts[0] == "DA":
+            main_parts = parts[1:]
+        else:
+            main_parts = parts
+
+        cleaned_parts = []
+
+        for part in main_parts:
+            if part in {"GDIFC", "GDIFR", "GDIFAR", "SIC", "FC"}:
+                continue
+
+            cleaned_parts.append(part)
+
+        if not cleaned_parts:
+            cleaned_parts = main_parts
+
+        main = "_".join(cleaned_parts)
+
+        if main in {"UB", "UE"}:
+            main = f"{main}DATE"
+
+        if not main:
+            return "DA"
+
+        return f"DA_{main}"
+
+    def record_code(
+        self,
+        record_name: str,
+    ) -> str:
+        normalized = self.to_db2_name(record_name)
+
+        if normalized.startswith("VM"):
+            normalized = normalized[2:]
+
+        normalized = normalized.replace("_", "")
 
         return normalized
 
