@@ -1,24 +1,18 @@
 import re
 
 from idms_modernizer.domain.schema_models import DataField
+from idms_modernizer.services.name_normalizer import NameNormalizer
 
 
 class SchemaPictureEnricher:
     """
-    Fast schema picture enricher.
+    Enriches DataField objects using schema listing lines.
 
-    Behavior:
-    - Preserves DataField.level from FieldExtractor.
-    - Does not use hardcoded business field names.
-    - Datatype is derived from PIC clause and USAGE only.
-    - Captures start position, storage length, field end position, and basetype.
-    - Infers DATE groups generically from date-like group structure and byte length.
-
-    Rules:
-    - X / X(n) -> CHAR / VARCHAR
-    - 9 / 9(n) / S9 / S9(n) -> SMALLINT / INTEGER / BIGINT
-    - Decimal PIC with V -> DECIMAL
-    - COMP / COMP-3 respected generically
+    Generic behavior only:
+    - No business table names are hardcoded.
+    - No specific record names are hardcoded.
+    - PIC text is preserved as close to schema listing as possible.
+    - If PDF extraction drops parentheses, PIC is reconstructed from usage and storage length.
     """
 
     FIELD_START_PATTERN = re.compile(
@@ -29,7 +23,7 @@ class SchemaPictureEnricher:
     )
 
     USAGE_PATTERN = re.compile(
-        r"\b(DISPLAY|COMP-3|COMP)\b",
+        r"\b(?:USAGE\s+IS\s+)?(?P<usage>DISPLAY|COMP-3|COMP)\b",
         re.IGNORECASE,
     )
 
@@ -38,40 +32,51 @@ class SchemaPictureEnricher:
         re.IGNORECASE,
     )
 
-    X_PAREN = re.compile(
-        r"\bX\s*$\s*(?P<length>[0-9]+)\s*$",
-        re.IGNORECASE,
+    PIC_WITH_KEYWORD_PATTERN = re.compile(
+        r"""
+        \bPIC(?:TURE)?\s+
+        (?P<pic>
+            S?\s*9\s*$\s*\d+\s*$\s*V\s*9\s*$\s*\d+\s*$
+            |
+            S?\s*9\s*$\s*\d+\s*$\s*V\s*9+
+            |
+            S?\s*9+\s*V\s*9\s*$\s*\d+\s*$
+            |
+            S?\s*9+\s*V\s*9+
+            |
+            S?\s*9\s*$\s*\d+\s*$
+            |
+            S?\s*9+
+            |
+            X\s*$\s*\d+\s*$
+            |
+            X+
+        )
+        """,
+        re.IGNORECASE | re.VERBOSE,
     )
 
-    NINE_PAREN = re.compile(
-        r"\bS?9\s*$\s*(?P<digits>[0-9]+)\s*$",
-        re.IGNORECASE,
-    )
-
-    DECIMAL_PAREN = re.compile(
-        r"\b(?P<int_part>S?9)\s*$\s*(?P<int_digits>[0-9]+)\s*$"
-        r"\s*V\s*9\s*$\s*(?P<dec_digits>[0-9]+)\s*$",
-        re.IGNORECASE,
-    )
-
-    DECIMAL_INLINE = re.compile(
-        r"\b(?P<int_part>S?9+)\s*V\s*(?P<dec_part>9+)\b",
-        re.IGNORECASE,
-    )
-
-    SIGNED_FRACTION = re.compile(
-        r"\bS?V(?P<dec_part>9+)\b",
-        re.IGNORECASE,
-    )
-
-    INLINE_X = re.compile(
-        r"\bX+\b",
-        re.IGNORECASE,
-    )
-
-    INLINE_9 = re.compile(
-        r"\bS?9+\b",
-        re.IGNORECASE,
+    PIC_ANYWHERE_PATTERN = re.compile(
+        r"""
+        (?P<pic>
+            S?\s*9\s*$\s*\d+\s*$\s*V\s*9\s*$\s*\d+\s*$
+            |
+            S?\s*9\s*$\s*\d+\s*$\s*V\s*9+
+            |
+            S?\s*9+\s*V\s*9\s*$\s*\d+\s*$
+            |
+            S?\s*9+\s*V\s*9+
+            |
+            S?\s*9\s*$\s*\d+\s*$
+            |
+            S?\s*9+
+            |
+            X\s*$\s*\d+\s*$
+            |
+            X+
+        )
+        """,
+        re.IGNORECASE | re.VERBOSE,
     )
 
     def enrich(
@@ -79,105 +84,47 @@ class SchemaPictureEnricher:
         fields: list[DataField],
         lines: list[str],
     ) -> list[DataField]:
-        print("USING SCHEMA PICTURE ENRICHER VERSION GENERIC-NO-NAME-RULES-WITH-LEVEL")
+        print("USING SCHEMA PICTURE ENRICHER VERSION FULL-PIC-FORMAT-FIX")
 
-        cleaned_lines = self.clean_lines(
-            lines=lines,
-        )
+        field_blocks = self.build_field_blocks(lines=lines)
 
-        field_blocks = self.build_field_blocks(
-            lines=cleaned_lines,
-        )
+        enriched_fields: list[DataField] = []
 
-        enriched: list[DataField] = []
+        for field in fields or []:
+            field_name = getattr(field, "name", "") or ""
 
-        for field in fields:
-            if not field or not field.name:
-                continue
-
-            block = field_blocks.get(
-                field.name.upper(),
-                "",
+            block = self.find_block_for_field(
+                field_name=field_name,
+                field_blocks=field_blocks,
             )
 
-            enriched.append(
+            enriched_fields.append(
                 self.enrich_field(
                     field=field,
                     block=block,
                 )
             )
 
-        return enriched
-
-    def clean_lines(
-        self,
-        lines: list[str],
-    ) -> list[str]:
-        result: list[str] = []
-
-        for line in lines:
-            if not line:
-                continue
-
-            value = str(line)
-
-            value = value.replace(
-                "\t",
-                " ",
-            )
-
-            value = value.replace(
-                "\u00a0",
-                " ",
-            )
-
-            value = value.replace(
-                "PICTURE . ",
-                "PICTURE ",
-            )
-
-            value = value.replace(
-                "PIC. ",
-                "PIC ",
-            )
-
-            value = re.sub(
-                r"<[^>]+>",
-                " ",
-                value,
-            )
-
-            value = re.sub(
-                r"\s+",
-                " ",
-                value,
-            ).strip()
-
-            if value:
-                result.append(value)
-
-        return result
+        return enriched_fields
 
     def build_field_blocks(
         self,
         lines: list[str],
     ) -> dict[str, str]:
+        normalized_lines = self.normalize_lines(lines=lines)
+
         starts: list[tuple[int, str]] = []
 
-        for index, line in enumerate(lines):
-            match = self.FIELD_START_PATTERN.match(
-                line,
-            )
+        for index, line in enumerate(normalized_lines):
+            match = self.FIELD_START_PATTERN.match(line)
 
             if not match:
                 continue
 
-            field_name = match.group("name").upper()
-
             starts.append(
                 (
                     index,
-                    field_name,
+                    match.group("name").upper(),
                 )
             )
 
@@ -189,19 +136,60 @@ class SchemaPictureEnricher:
             if index + 1 < len(starts):
                 end_index = starts[index + 1][0]
             else:
-                end_index = len(lines)
+                end_index = len(normalized_lines)
 
-            if field_name == "FILLER":
-                continue
+            block = " ".join(normalized_lines[start_index:end_index])
+            normalized_field_name = NameNormalizer.normalize(field_name)
 
-            block = " ".join(
-                lines[start_index:end_index],
-            )
-
-            if field_name not in blocks:
-                blocks[field_name] = block
+            if normalized_field_name:
+                blocks[normalized_field_name] = block
 
         return blocks
+
+    def normalize_lines(
+        self,
+        lines: list[str],
+    ) -> list[str]:
+        result: list[str] = []
+
+        for line in lines or []:
+            if not line:
+                continue
+
+            value = str(line)
+            value = value.replace("\t", " ")
+            value = value.replace("\u00a0", " ")
+            value = value.replace("PICTURE.", "PICTURE")
+            value = value.replace("PIC.", "PIC")
+
+            value = re.sub(r"<[^>]+>", " ", value)
+            value = re.sub(r"\s+", " ", value).strip()
+
+            if value:
+                result.append(value)
+
+        return result
+
+    def find_block_for_field(
+        self,
+        field_name: str,
+        field_blocks: dict[str, str],
+    ) -> str:
+        normalized_name = NameNormalizer.normalize(field_name or "")
+
+        if not normalized_name:
+            return ""
+
+        if normalized_name in field_blocks:
+            return field_blocks[normalized_name]
+
+        suffix_removed = self.remove_record_suffix(value=normalized_name)
+
+        for block_name, block in field_blocks.items():
+            if self.remove_record_suffix(block_name) == suffix_removed:
+                return block
+
+        return ""
 
     def enrich_field(
         self,
@@ -209,119 +197,113 @@ class SchemaPictureEnricher:
         block: str,
     ) -> DataField:
         if not block:
-            return self.copy_field_with_defaults(
-                field=field,
-            )
+            return self.copy_field_with_defaults(field=field)
 
-        usage = self.extract_usage(
-            block=block,
-        )
+        usage = self.extract_usage(block=block)
 
         start_position, storage_length = self.extract_start_and_length(
             block=block,
         )
 
-        picture_block = self.remove_trailing_start_and_length(
+        picture_text = self.extract_picture(
             block=block,
+            usage=usage,
+            storage_length=storage_length,
+            field=field,
         )
 
-        if self.is_date_group(
-            field_name=field.name,
-            block=picture_block,
-            storage_length=storage_length,
-        ):
-            return self.make_field(
-                name=field.name,
-                level=getattr(field, "level", None),
-                datatype="DATE",
-                length=None,
-                scale=None,
-                picture=None,
-                start_position=start_position,
-                storage_length=storage_length,
-            )
-
-        datatype, length, scale, picture = self.parse_block(
-            block=picture_block,
+        datatype, logical_length, scale, clean_picture = self.derive_type_from_picture(
+            field=field,
+            picture=picture_text,
             usage=usage,
             storage_length=storage_length,
         )
 
-        return self.make_field(
-            name=field.name,
-            level=getattr(field, "level", None),
-            datatype=datatype,
-            length=length,
-            scale=scale,
-            picture=picture,
-            start_position=start_position,
+        if self.is_date_field(
+            field=field,
+            picture=clean_picture,
             storage_length=storage_length,
+            datatype=datatype,
+        ):
+            datatype = "DATE"
+            logical_length = None
+            scale = None
+            clean_picture = clean_picture or picture_text
+
+        end_position = None
+
+        if start_position is not None and storage_length is not None:
+            end_position = start_position + storage_length - 1
+
+        return self.make_field(
+            source=field,
+            datatype=datatype,
+            length=logical_length,
+            scale=scale,
+            picture=clean_picture,
+            start_position=start_position,
+            end_position=end_position,
+            basetype=self.basetype_for_datatype(datatype=datatype),
         )
 
     def copy_field_with_defaults(
         self,
         field: DataField,
     ) -> DataField:
-        return DataField(
-            name=field.name,
-            level=getattr(field, "level", None),
-            datatype=field.datatype,
-            length=field.length,
-            scale=field.scale,
-            picture=field.picture,
+        return self.make_field(
+            source=field,
+            datatype=getattr(field, "datatype", None),
+            length=getattr(field, "length", None),
+            scale=getattr(field, "scale", None),
+            picture=getattr(field, "picture", None),
             start_position=getattr(field, "start_position", None),
             end_position=getattr(field, "end_position", None),
-            basetype=getattr(
-                field,
-                "basetype",
-                self.derive_basetype(field.datatype),
-            ),
+            basetype=getattr(field, "basetype", None),
         )
 
     def make_field(
         self,
-        name: str,
-        level: int | None,
+        source: DataField,
         datatype: str | None,
         length: int | None,
         scale: int | None,
         picture: str | None,
         start_position: int | None,
-        storage_length: int | None,
+        end_position: int | None,
+        basetype: str | None,
     ) -> DataField:
-        end_position = None
+        data = source.model_dump()
 
-        if start_position is not None and storage_length is not None:
-            end_position = start_position + storage_length - 1
-
-        return DataField(
-            name=name,
-            level=level,
-            datatype=datatype,
-            length=length,
-            scale=scale,
-            picture=picture,
-            start_position=start_position,
-            end_position=end_position,
-            basetype=self.derive_basetype(
-                datatype=datatype,
-            ),
+        data.update(
+            {
+                "datatype": datatype,
+                "length": length,
+                "scale": scale,
+                "picture": picture,
+                "start_position": start_position,
+                "end_position": end_position,
+                "basetype": basetype,
+            }
         )
+
+        return DataField(**data)
 
     def extract_usage(
         self,
         block: str,
     ) -> str:
-        upper = block.upper()
+        upper = str(block or "").upper()
 
         if "COMP-3" in upper:
             return "COMP-3"
 
-        if re.search(
-            r"\bCOMP\b",
-            upper,
-        ):
+        if re.search(r"\bCOMP\b", upper):
             return "COMP"
+
+        usage_match = self.USAGE_PATTERN.search(block or "")
+
+        if usage_match:
+            return usage_match.group("usage").upper()
 
         return "DISPLAY"
 
@@ -329,410 +311,376 @@ class SchemaPictureEnricher:
         self,
         block: str,
     ) -> tuple[int | None, int | None]:
-        cleaned = self.clean_text(
-            value=block,
-        )
-
-        match = self.START_LENGTH_PATTERN.search(
-            cleaned,
-        )
+        match = self.START_LENGTH_PATTERN.search(block or "")
 
         if not match:
             return None, None
 
-        try:
-            return (
-                int(match.group("start")),
-                int(match.group("length")),
-            )
-        except Exception:
-            return None, None
+        return int(match.group("start")), int(match.group("length"))
 
-    def extract_storage_length(
-        self,
-        block: str,
-    ) -> int | None:
-        _, storage_length = self.extract_start_and_length(
-            block=block,
-        )
-
-        return storage_length
-
-    def remove_trailing_start_and_length(
-        self,
-        block: str,
-    ) -> str:
-        cleaned = self.clean_text(
-            value=block,
-        )
-
-        return self.START_LENGTH_PATTERN.sub(
-            "",
-            cleaned,
-        ).strip()
-
-    def is_date_group(
-        self,
-        field_name: str,
-        block: str,
-        storage_length: int | None,
-    ) -> bool:
-        upper_name = field_name.upper()
-        upper_block = block.upper()
-
-        if "-YEAR-" in upper_name or " YEAR " in upper_name:
-            return False
-
-        if "-MONTH-" in upper_name or " MONTH " in upper_name:
-            return False
-
-        if "-DAY-" in upper_name or " DAY " in upper_name:
-            return False
-
-        if not (
-            upper_name.endswith("DATE")
-            or "-DATE-" in upper_name
-            or upper_name.endswith(" DATE")
-            or " DATE " in upper_name
-            or " DATE_" in upper_name
-        ):
-            return False
-
-        if storage_length == 8:
-            return True
-
-        if (
-            "YEAR" in upper_block
-            and "MONTH" in upper_block
-            and "DAY" in upper_block
-        ):
-            return True
-
-        return False
-
-    def parse_block(
+    def extract_picture(
         self,
         block: str,
         usage: str,
         storage_length: int | None,
-    ) -> tuple[str | None, int | None, int | None, str | None]:
-        upper = self.clean_text(
-            value=block,
-        ).upper()
+        field: DataField,
+    ) -> str | None:
+        if not block:
+            return None
 
-        decimal_match = self.DECIMAL_PAREN.search(
-            upper,
+        picture_area = self.remove_trailing_start_and_length(value=block)
+
+        keyword_matches = list(self.PIC_WITH_KEYWORD_PATTERN.finditer(picture_area))
+
+        if keyword_matches:
+            match = self.best_picture_match(keyword_matches)
+            raw_picture = self.clean_picture(
+                value=match.group("pic"),
+                usage=usage,
+            )
+
+            return self.reconstruct_picture_if_needed(
+                field=field,
+                picture=raw_picture,
+                usage=usage,
+                storage_length=storage_length,
+            )
+
+        anywhere_matches = list(self.PIC_ANYWHERE_PATTERN.finditer(picture_area))
+
+        if not anywhere_matches:
+            return None
+
+        match = self.best_picture_match(matches=anywhere_matches)
+
+        raw_picture = self.clean_picture(
+            value=match.group("pic"),
+            usage=usage,
         )
 
-        if decimal_match:
-            int_digits = int(
-                decimal_match.group("int_digits"),
-            )
-
-            dec_digits = int(
-                decimal_match.group("dec_digits"),
-            )
-
-            precision = int_digits + dec_digits
-
-            return (
-                "DECIMAL",
-                precision,
-                dec_digits,
-                self.clean_picture(
-                    decimal_match.group(0),
-                ),
-            )
-
-        decimal_match = self.DECIMAL_INLINE.search(
-            upper,
+        return self.reconstruct_picture_if_needed(
+            field=field,
+            picture=raw_picture,
+            usage=usage,
+            storage_length=storage_length,
         )
 
-        if decimal_match:
-            integer_digits = len(
-                decimal_match.group("int_part").replace(
-                    "S",
-                    "",
-                )
-            )
-
-            decimal_digits = len(
-                decimal_match.group("dec_part"),
-            )
-
-            precision = integer_digits + decimal_digits
-
-            return (
-                "DECIMAL",
-                precision,
-                decimal_digits,
-                self.clean_picture(
-                    decimal_match.group(0),
-                ),
-            )
-
-        signed_fraction_match = self.SIGNED_FRACTION.search(
-            upper,
-        )
-
-        if signed_fraction_match:
-            decimal_digits = len(
-                signed_fraction_match.group("dec_part"),
-            )
-
-            return (
-                "DECIMAL",
-                decimal_digits,
-                decimal_digits,
-                self.clean_picture(
-                    signed_fraction_match.group(0),
-                ),
-            )
-
-        x_paren = self.X_PAREN.search(
-            upper,
-        )
-
-        if x_paren:
-            length = int(
-                x_paren.group("length"),
-            )
-
-            if length == 1:
-                return (
-                    "CHAR",
-                    1,
-                    None,
-                    "X",
-                )
-
-            return (
-                "VARCHAR",
-                length,
-                None,
-                "X",
-            )
-
-        nine_paren = self.NINE_PAREN.search(
-            upper,
-        )
-
-        if nine_paren:
-            digits = int(
-                nine_paren.group("digits"),
-            )
-
-            if usage in {"COMP", "COMP-3"}:
-                return (
-                    "DECIMAL",
-                    self.comp3_precision_from_storage(
-                        storage_length=storage_length,
-                    )
-                    if usage == "COMP-3"
-                    else digits,
-                    0,
-                    "9",
-                )
-
-            datatype = self.integer_datatype_for_digits(
-                digits=digits,
-            )
-
-            return (
-                datatype,
-                None,
-                None,
-                "9",
-            )
-
-        inline_x = self.INLINE_X.search(
-            upper,
-        )
-
-        if inline_x:
-            raw = self.clean_picture(
-                inline_x.group(0),
-            )
-
-            length = len(raw)
-
-            if length == 1 and storage_length and storage_length > 1:
-                return (
-                    "VARCHAR",
-                    storage_length,
-                    None,
-                    "X",
-                )
-
-            if length == 1:
-                return (
-                    "CHAR",
-                    1,
-                    None,
-                    "X",
-                )
-
-            return (
-                "VARCHAR",
-                length,
-                None,
-                "X",
-            )
-
-        inline_9 = self.INLINE_9.search(
-            upper,
-        )
-
-        if inline_9:
-            raw = self.clean_picture(
-                inline_9.group(0),
-            )
-
-            digits = len(
-                raw.replace(
-                    "S",
-                    "",
-                )
-            )
-
-            if usage in {"COMP", "COMP-3"}:
-                return (
-                    "DECIMAL",
-                    self.comp3_precision_from_storage(
-                        storage_length=storage_length,
-                    )
-                    if usage == "COMP-3"
-                    else digits,
-                    0,
-                    "9",
-                )
-
-            datatype = self.integer_datatype_for_digits(
-                digits=digits,
-            )
-
-            return (
-                datatype,
-                None,
-                None,
-                "9",
-            )
-
-        if storage_length:
-            return (
-                "VARCHAR",
-                storage_length,
-                None,
-                None,
-            )
-
-        return (
-            None,
-            None,
-            None,
-            None,
-        )
-
-    def clean_text(
+    def best_picture_match(
         self,
-        value: str,
-    ) -> str:
-        if value is None:
-            return ""
+        matches,
+    ):
+        def score(match) -> tuple[int, int]:
+            value = self.clean_picture(match.group("pic")) or ""
+            core = self.picture_core(value)
 
-        cleaned = str(value)
+            score_value = 0
 
-        cleaned = cleaned.replace(
-            "\t",
-            " ",
-        )
+            if "(" in core and ")" in core:
+                score_value += 100
 
-        cleaned = cleaned.replace(
-            "\u00a0",
-            " ",
-        )
+            if "V" in core:
+                score_value += 50
 
-        cleaned = re.sub(
-            r"<[^>]+>",
-            " ",
-            cleaned,
-        )
+            if core.startswith("S"):
+                score_value += 10
 
-        cleaned = re.sub(
-            r"\s+",
-            " ",
-            cleaned,
-        ).strip()
+            score_value += len(core)
 
-        return cleaned
+            return score_value, match.start()
 
-    def clean_picture(
+        return sorted(matches, key=score)[-1]
+
+    def reconstruct_picture_if_needed(
         self,
-        value: str,
-    ) -> str:
-        if value is None:
-            return ""
+        field: DataField,
+        picture: str | None,
+        usage: str,
+        storage_length: int | None,
+    ) -> str | None:
+        if not picture:
+            return None
 
-        cleaned = str(value).upper()
+        usage_upper = str(usage or "").upper()
+        core = self.picture_core(picture)
 
-        cleaned = re.sub(
-            r"\s+",
-            "",
-            cleaned,
-        )
+        if not core:
+            return picture
 
-        cleaned = cleaned.replace(
-            "PICTURE",
-            "",
-        )
+        if "(" in core and ")" in core:
+            return self.format_picture_spacing(picture)
 
-        cleaned = cleaned.replace(
-            "PIC",
-            "",
-        )
+        if "V" in core:
+            return self.format_picture_spacing(picture)
 
-        return cleaned.strip()
+        if core == "X":
+            if storage_length and storage_length > 1:
+                return f"X({storage_length})"
 
-    def integer_datatype_for_digits(
-        self,
-        digits: int,
-    ) -> str:
-        if digits <= 4:
-            return "SMALLINT"
+            return self.format_picture_spacing(picture)
 
-        if digits <= 9:
-            return "INTEGER"
+        if core in {"9", "S9"}:
+            signed = core.startswith("S")
 
-        return "BIGINT"
+            if usage_upper == "COMP-3":
+                precision = self.comp3_precision_from_storage(
+                    storage_length=storage_length,
+                )
+
+                prefix = "S9" if signed else "9"
+
+                return f"{prefix}({precision}) COMP-3"
+
+            if storage_length and storage_length > 1:
+                prefix = "S9" if signed else "9"
+
+                return f"{prefix}({storage_length})"
+
+            return self.format_picture_spacing(picture)
+
+        return self.format_picture_spacing(picture)
 
     def comp3_precision_from_storage(
         self,
         storage_length: int | None,
     ) -> int:
-        if storage_length:
-            return max(
-                storage_length * 2 - 1,
-                1,
+        if not storage_length:
+            return 1
+
+        return max((int(storage_length) * 2) - 1, 1)
+
+    def format_picture_spacing(
+        self,
+        picture: str | None,
+    ) -> str | None:
+        if not picture:
+            return None
+
+        text = str(picture).upper().strip()
+        text = text.replace("COMP-3", " COMP-3")
+        text = text.replace("COMP", " COMP")
+
+        text = re.sub(r"\s+", " ", text).strip()
+
+        return text
+
+    def remove_trailing_start_and_length(
+        self,
+        value: str,
+    ) -> str:
+        return re.sub(
+            r"\s+[0-9]+\s+[0-9]+\s*$",
+            "",
+            str(value or ""),
+        ).strip()
+
+    def clean_picture(
+        self,
+        value: str | None,
+        usage: str | None = None,
+    ) -> str | None:
+        if not value:
+            return None
+
+        text = str(value).upper()
+        text = re.sub(r"\s+", "", text)
+        text = text.replace(".", "")
+
+        if usage:
+            usage_upper = usage.upper()
+
+            if usage_upper in {"COMP", "COMP-3"} and usage_upper not in text:
+                text = f"{text} {usage_upper}"
+
+        return self.format_picture_spacing(text)
+
+    def picture_core(
+        self,
+        picture: str | None,
+    ) -> str:
+        text = str(picture or "").upper()
+
+        text = text.replace("COMP-3", "")
+        text = text.replace("COMP", "")
+        text = text.replace("DISPLAY", "")
+        text = text.replace("PIC", "")
+        text = text.replace("PICTURE", "")
+        text = text.replace(" ", "")
+        text = text.replace(".", "")
+
+        return text
+
+    def derive_type_from_picture(
+        self,
+        field: DataField,
+        picture: str | None,
+        usage: str,
+        storage_length: int | None,
+    ) -> tuple[str | None, int | None, int | None, str | None]:
+        if not picture:
+            if getattr(field, "has_child", False) or getattr(field, "is_group", False):
+                return None, storage_length, None, None
+
+            return getattr(field, "datatype", None), storage_length, None, None
+
+        pic = self.clean_picture(
+            value=picture,
+            usage=usage,
+        )
+
+        core = self.picture_core(picture=pic)
+
+        if not core:
+            return None, storage_length, None, pic
+
+        if self.picture_is_character(core):
+            length = self.character_length(picture=core)
+            return "CHAR", length, None, pic
+
+        if self.picture_is_decimal(core):
+            precision, scale = self.decimal_precision_scale(picture=core)
+            return "DECIMAL", precision, scale, pic
+
+        if self.picture_is_numeric(core):
+            precision = self.numeric_precision(picture=core)
+            return "DECIMAL", precision, 0, pic
+
+        return None, storage_length, None, pic
+
+    def picture_is_character(
+        self,
+        picture: str,
+    ) -> bool:
+        return bool(
+            re.fullmatch(
+                r"X+|X$\d+$",
+                picture,
+                flags=re.IGNORECASE,
             )
+        )
 
-        return 9
+    def character_length(
+        self,
+        picture: str,
+    ) -> int:
+        repeated = re.fullmatch(
+            r"X$(\d+)$",
+            picture,
+            flags=re.IGNORECASE,
+        )
 
-    def derive_basetype(
+        if repeated:
+            return int(repeated.group(1))
+
+        return picture.upper().count("X")
+
+    def picture_is_numeric(
+        self,
+        picture: str,
+    ) -> bool:
+        return "9" in picture.upper()
+
+    def picture_is_decimal(
+        self,
+        picture: str,
+    ) -> bool:
+        return "V" in picture.upper() and "9" in picture.upper()
+
+    def decimal_precision_scale(
+        self,
+        picture: str,
+    ) -> tuple[int, int]:
+        pic = picture.upper().replace("S", "")
+        before_v, after_v = pic.split("V", 1)
+
+        integer_digits = self.count_9_digits(value=before_v)
+        decimal_digits = self.count_9_digits(value=after_v)
+
+        return integer_digits + decimal_digits, decimal_digits
+
+    def numeric_precision(
+        self,
+        picture: str,
+    ) -> int:
+        pic = picture.upper().replace("S", "")
+
+        if "V" in pic:
+            before_v, after_v = pic.split("V", 1)
+            return self.count_9_digits(before_v) + self.count_9_digits(after_v)
+
+        return self.count_9_digits(value=pic)
+
+    def count_9_digits(
+        self,
+        value: str,
+    ) -> int:
+        total = 0
+
+        for match in re.finditer(
+            r"9(?:$(\d+)$)?",
+            value,
+            flags=re.IGNORECASE,
+        ):
+            if match.group(1):
+                total += int(match.group(1))
+            else:
+                total += 1
+
+        return total
+
+    def is_date_field(
+        self,
+        field: DataField,
+        picture: str | None,
+        storage_length: int | None,
+        datatype: str | None,
+    ) -> bool:
+        name = NameNormalizer.normalize(getattr(field, "name", "") or "")
+        normalized_name = name.replace(" ", "_")
+
+        if datatype == "DATE":
+            return True
+
+        if normalized_name.endswith("_DATE"):
+            return True
+
+        if "_DATE_" in normalized_name:
+            return True
+
+        tokens = [token for token in re.split(r"[\s_]+", normalized_name) if token]
+
+        if tokens and tokens[0] == "DA":
+            return True
+
+        if "DATE" in tokens:
+            return True
+
+        return False
+
+    def basetype_for_datatype(
         self,
         datatype: str | None,
     ) -> str | None:
         if not datatype:
             return None
 
-        upper = datatype.upper()
+        datatype = datatype.upper()
 
-        if upper in {"CHAR", "VARCHAR"}:
-            return "TEXT"
-
-        if upper in {"SMALLINT", "INTEGER", "BIGINT", "DECIMAL"}:
-            return "NUMERIC"
-
-        if upper in {"DATE", "TIMESTAMP", "DATETIME"}:
+        if datatype == "DATE":
             return "DATE"
 
-        return None
+        if datatype == "CHAR":
+            return "TEXT"
+
+        if datatype == "DECIMAL":
+            return "NUMERIC"
+
+        return datatype
+
+    def remove_record_suffix(
+        self,
+        value: str,
+    ) -> str:
+        normalized = NameNormalizer.normalize(value or "")
+        normalized = normalized.replace(" ", "_")
+
+        return re.sub(r"_[0-9]{4}$", "", normalized)

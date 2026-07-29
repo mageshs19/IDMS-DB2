@@ -20,9 +20,24 @@ class DB2MappingService:
     - No hardcoded table names.
     - No hardcoded column names.
     - No hardcoded SET names.
-    - Uses every owner PK column for FK columns.
-    - Composite PK owner creates multiple FK columns in member.
-    - If a record has no PK, creates ID_RECORD_<record_name> CHAR(20).
+    - SET / FK names are derived from schema relationships.
+
+    Naming rules:
+    - Normal COBOL field:
+      COBOL field name -> replace '-' with '_' -> strip punctuation
+      -> remove generic trailing qualifier where applicable
+      -> append _479<record-suffix>.
+
+    - Date field:
+      outer COBOL date field becomes one DB2 DATE column.
+      DB2 date column name is derived from outer date name and record suffix.
+
+    - Foreign key:
+      FK column reuses exact referenced/master DB2 column name.
+      No SET prefix is added to FK column names.
+
+    - Missing PK:
+      ID_RECORD_<record> CHAR(20).
     """
 
     TECHNICAL_KEY_DATATYPE = "CHAR(20)"
@@ -35,9 +50,10 @@ class DB2MappingService:
 
         for record in getattr(schema, "records", []) or []:
             record_name = getattr(record, "name", "") or ""
+            table_name = self.normalize_table_name(record_name)
 
             table = DB2Table(
-                name=self.normalize_table_name(record_name),
+                name=table_name,
                 columns=[],
                 foreign_keys=[],
                 primary_key=None,
@@ -49,7 +65,10 @@ class DB2MappingService:
             )
 
             table.primary_keys = [
-                self.normalize_column_name(primary_key)
+                self.normalize_column_name(
+                    value=primary_key,
+                    record_name=record_name,
+                )
                 for primary_key in declared_primary_keys
                 if primary_key
             ]
@@ -60,8 +79,12 @@ class DB2MappingService:
             added_columns: set[str] = set()
 
             for field in getattr(record, "fields", []) or []:
+                raw_field_name = getattr(field, "name", "") or ""
+
                 column_name = self.normalize_column_name(
-                    getattr(field, "name", "") or "",
+                    value=raw_field_name,
+                    record_name=record_name,
+                    field=field,
                 )
 
                 if not column_name:
@@ -133,7 +156,9 @@ class DB2MappingService:
         cleaned: list[str] = []
 
         for primary_key_value in primary_keys:
-            normalized = self.normalize_column_name(primary_key_value)
+            normalized = self.normalize_name(
+                value=primary_key_value,
+            )
 
             if not normalized:
                 continue
@@ -216,8 +241,8 @@ class DB2MappingService:
         self,
         record_name: str,
     ) -> str:
-        normalized_record_name = self.normalize_column_name(
-            record_name,
+        normalized_record_name = self.normalize_table_name(
+            value=record_name,
         )
 
         return f"ID_RECORD_{normalized_record_name}"
@@ -230,7 +255,7 @@ class DB2MappingService:
         seen: set[tuple[str, str, str]] = set()
 
         for set_def in getattr(schema, "sets", []) or []:
-            set_name = self.normalize_column_name(
+            set_name = self.normalize_name(
                 self.get_attr(set_def, "name")
                 or self.get_attr(set_def, "set_name")
                 or ""
@@ -261,7 +286,7 @@ class DB2MappingService:
             )
 
         for relationship in getattr(schema, "relationships", []) or []:
-            set_name = self.normalize_column_name(
+            set_name = self.normalize_name(
                 self.get_attr(relationship, "set_name")
                 or self.get_attr(relationship, "name")
                 or self.get_attr(relationship, "set")
@@ -420,9 +445,8 @@ class DB2MappingService:
                 )
 
             for owner_pk_column in owner_pk_columns:
-                fk_column = self.ensure_set_specific_fk_column(
+                fk_column = self.ensure_fk_column_reusing_parent_name(
                     child_table=member_table,
-                    set_name=set_name,
                     parent_pk_column=owner_pk_column,
                 )
 
@@ -433,6 +457,37 @@ class DB2MappingService:
                     parent_column=owner_pk_column.name,
                     set_name=set_name,
                 )
+
+    def ensure_fk_column_reusing_parent_name(
+        self,
+        child_table: DB2Table,
+        parent_pk_column: DB2Column,
+    ) -> DB2Column:
+        column_name = parent_pk_column.name
+
+        existing_column = self.find_column(
+            table=child_table,
+            column_name=column_name,
+        )
+
+        if existing_column is not None:
+            existing_column.nullable = True
+            existing_column.generated = True
+            existing_column.source_kind = "SET_FK"
+            return existing_column
+
+        new_column = DB2Column(
+            name=column_name,
+            datatype=parent_pk_column.datatype,
+            nullable=True,
+            primary_key=False,
+            generated=True,
+            source_kind="SET_FK",
+        )
+
+        child_table.columns.append(new_column)
+
+        return new_column
 
     def get_primary_key_columns(
         self,
@@ -468,40 +523,6 @@ class DB2MappingService:
 
         return columns
 
-    def ensure_set_specific_fk_column(
-        self,
-        child_table: DB2Table,
-        set_name: str,
-        parent_pk_column: DB2Column,
-    ) -> DB2Column:
-        column_name = self.normalize_column_name(
-            f"{set_name}_{parent_pk_column.name}",
-        )
-
-        existing_column = self.find_column(
-            table=child_table,
-            column_name=column_name,
-        )
-
-        if existing_column is not None:
-            existing_column.nullable = True
-            existing_column.generated = True
-            existing_column.source_kind = "SET_FK"
-            return existing_column
-
-        new_column = DB2Column(
-            name=column_name,
-            datatype=parent_pk_column.datatype,
-            nullable=True,
-            primary_key=False,
-            generated=True,
-            source_kind="SET_FK",
-        )
-
-        child_table.columns.append(new_column)
-
-        return new_column
-
     def add_foreign_key_if_missing(
         self,
         child_table: DB2Table,
@@ -523,7 +544,7 @@ class DB2MappingService:
                 column_name=child_column,
                 reference_table=parent_table.name,
                 reference_column=parent_column,
-                set_name=self.normalize_column_name(set_name),
+                set_name=self.normalize_name(set_name),
             )
         )
 
@@ -534,17 +555,17 @@ class DB2MappingService:
         parent_table: DB2Table,
         parent_column: str,
     ) -> bool:
-        normalized_child_column = self.normalize_column_name(child_column)
+        normalized_child_column = self.normalize_name(child_column)
         normalized_parent_table = self.normalize_table_name(parent_table.name)
-        normalized_parent_column = self.normalize_column_name(parent_column)
+        normalized_parent_column = self.normalize_name(parent_column)
 
         for existing_fk in getattr(child_table, "foreign_keys", []) or []:
             if (
-                self.normalize_column_name(existing_fk.column_name)
+                self.normalize_name(existing_fk.column_name)
                 == normalized_child_column
                 and self.normalize_table_name(existing_fk.reference_table)
                 == normalized_parent_table
-                and self.normalize_column_name(existing_fk.reference_column)
+                and self.normalize_name(existing_fk.reference_column)
                 == normalized_parent_column
             ):
                 return True
@@ -567,7 +588,7 @@ class DB2MappingService:
             if table_normalized == normalized_name:
                 return table
 
-            if self.remove_record_suffix(table_normalized) == self.remove_record_suffix(normalized_name):
+            if self.remove_numeric_suffix(table_normalized) == self.remove_numeric_suffix(normalized_name):
                 return table
 
         return None
@@ -577,34 +598,21 @@ class DB2MappingService:
         table: DB2Table,
         column_name: str | None,
     ) -> DB2Column | None:
-        normalized_name = self.normalize_column_name(column_name)
+        normalized_name = self.normalize_name(column_name)
 
         if not normalized_name:
             return None
 
         for column in getattr(table, "columns", []) or []:
-            column_normalized = self.normalize_column_name(column.name)
+            column_normalized = self.normalize_name(column.name)
 
             if column_normalized == normalized_name:
                 return column
 
-            if self.remove_record_suffix(column_normalized) == self.remove_record_suffix(normalized_name):
+            if self.remove_numeric_suffix(column_normalized) == self.remove_numeric_suffix(normalized_name):
                 return column
 
         return None
-
-    def get_attr(
-        self,
-        source,
-        name: str,
-    ):
-        if source is None:
-            return None
-
-        if isinstance(source, dict):
-            return source.get(name)
-
-        return getattr(source, name, None)
 
     def normalize_table_name(
         self,
@@ -615,8 +623,155 @@ class DB2MappingService:
     def normalize_column_name(
         self,
         value,
+        record_name: str | None = None,
+        field=None,
     ) -> str:
-        return self.normalize_name(value=value)
+        raw = self.normalize_name(value=value)
+
+        if not raw:
+            return ""
+
+        if raw.startswith("ID_RECORD_"):
+            return raw
+
+        if record_name:
+            if field is not None and self.is_date_field(field=field):
+                base = self.date_column_base_name(field_name=raw)
+            else:
+                base = self.legacy_column_base_name(field_name=raw)
+
+            record_code = self.record_code(record_name=record_name)
+
+            if record_code:
+                return f"{base}_{record_code}"
+
+        return raw
+
+    def legacy_column_base_name(
+        self,
+        field_name: str,
+    ) -> str:
+        normalized = self.normalize_name(field_name)
+
+        normalized = self.remove_numeric_suffix(normalized)
+
+        parts = [
+            part
+            for part in normalized.split("_")
+            if part
+        ]
+
+        if len(parts) >= 3:
+            parts = parts[:-1]
+
+        if not parts:
+            return normalized
+
+        return "_".join(parts)
+
+    def date_column_base_name(
+        self,
+        field_name: str,
+    ) -> str:
+        normalized = self.normalize_name(field_name)
+        normalized = self.remove_numeric_suffix(normalized)
+
+        parts = [
+            part
+            for part in normalized.split("_")
+            if part
+        ]
+
+        if not parts:
+            return normalized
+
+        if parts[0] == "DA":
+            if len(parts) == 1:
+                return "DA_DATE"
+
+            main_parts = parts[1:]
+
+            if len(main_parts) >= 2:
+                main_parts = main_parts[:-1]
+
+            base = "_".join(main_parts)
+
+            return f"DA_{base}" if base else "DA_DATE"
+
+        if "DATE" in parts:
+            cleaned_parts = [
+                part
+                for part in parts
+                if part != "DATE"
+            ]
+
+            if cleaned_parts:
+                return f"DA_{self.compact_date_main_part(cleaned_parts)}"
+
+            return "DA_DATE"
+
+        return normalized
+
+    def compact_date_main_part(
+        self,
+        parts: list[str],
+    ) -> str:
+        return "_".join(parts)
+
+    def record_code(
+        self,
+        record_name: str | None,
+    ) -> str:
+        normalized = self.normalize_name(record_name)
+
+        compact = re.sub(
+            r"[^A-Z0-9]",
+            "",
+            normalized,
+        )
+
+        if not compact:
+            return ""
+
+        suffix = compact[-4:]
+
+        return f"479{suffix}"
+
+    def is_date_field(
+        self,
+        field,
+    ) -> bool:
+        datatype = str(
+            getattr(field, "datatype", "") or ""
+        ).upper()
+
+        basetype = str(
+            getattr(field, "basetype", "") or ""
+        ).upper()
+
+        field_name = self.normalize_name(
+            getattr(field, "name", "") or ""
+        )
+
+        if datatype == "DATE" or basetype == "DATE":
+            return True
+
+        if field_name.endswith("_DATE"):
+            return True
+
+        if "_DATE_" in field_name:
+            return True
+
+        parts = [
+            part
+            for part in field_name.split("_")
+            if part
+        ]
+
+        if parts and parts[0] == "DA":
+            return True
+
+        return False
 
     def normalize_name(
         self,
@@ -635,7 +790,7 @@ class DB2MappingService:
 
         return text
 
-    def remove_record_suffix(
+    def remove_numeric_suffix(
         self,
         value: str,
     ) -> str:
@@ -649,3 +804,16 @@ class DB2MappingService:
             "",
             text,
         )
+
+    def get_attr(
+        self,
+        source,
+        name: str,
+    ):
+        if source is None:
+            return None
+
+        if isinstance(source, dict):
+            return source.get(name)
+
+        return getattr(source, name, None)
