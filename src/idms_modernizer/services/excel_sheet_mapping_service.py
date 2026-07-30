@@ -10,7 +10,7 @@ from idms_modernizer.services.name_normalizer import NameNormalizer
 from idms_modernizer.services.db2_datatype_mapper import DB2DatatypeMapper
 
 
-print("LOADED ExcelSheetMappingService VERSION CALC-RESTORED-PIC-END-DATE-FK-2026-07-29")
+print("LOADED ExcelSheetMappingService VERSION FULL-LATEST-CALC-PIC-DATE-FK-NAMING-2026-07-29")
 
 
 class ExcelSheetMappingService:
@@ -22,8 +22,8 @@ class ExcelSheetMappingService:
     - Include all outer/group rows from mapping_fields.
     - Group rows do not create DB2 physical field names.
     - Outer CALC group does not show CALC.
-    - Inner descendants of CALC group show CALC.
-    - Inner non-date descendants of CALC group show PK.
+    - Inner groups under CALC also do not show CALC or PK.
+    - Only elementary non-date descendants of CALC show CALC and PK.
     - Date groups and date parts inside CALC show neither CALC nor PK.
     - FILLER rows are COBOL-only.
     - Outer date group shows DB2 record and DATE datatype.
@@ -31,6 +31,7 @@ class ExcelSheetMappingService:
     - Sheet Mapping DB2 datatype is calculated directly from IDMS PIC Clause.
     - Field end position = STRT + LGTH - 1.
     - SET/FK rows reuse referenced/master DB2 column names.
+    - DB2 field names use project naming rules and _479<record-code>.
     """
 
     COLUMNS = [
@@ -89,12 +90,38 @@ class ExcelSheetMappingService:
 
     DATE_CHILD_TOKENS = YEAR_PARTS | MONTH_PARTS | DAY_PARTS
 
+    PROJECT_ABBREVIATIONS = {
+        "FORM": "FM",
+        "EVPRCP": "ERCP",
+    }
+
+    GENERIC_TRAILING_TOKENS = {
+        "SIC",
+        "FC",
+        "GDIFC",
+        "GDIFR",
+        "GDIFAR",
+        "GDIF",
+        "GDI",
+        "REC",
+        "RECORD",
+    }
+
+    DATE_TRAILING_TOKENS = {
+        "SIC",
+        "FC",
+        "GDIFC",
+        "GDIFR",
+        "GDIF",
+        "GDI",
+    }
+
     def build(
         self,
         metadata: SchemaMetadata,
         db2_model: DB2Model,
     ) -> list[dict[str, str]]:
-        print("USING ExcelSheetMappingService.build VERSION CALC-RESTORED-PIC-END-DATE-FK-2026-07-29")
+        print("USING ExcelSheetMappingService.build VERSION FULL-LATEST-CALC-PIC-DATE-FK-NAMING-2026-07-29")
 
         rows: list[dict[str, str]] = []
 
@@ -251,7 +278,10 @@ class ExcelSheetMappingService:
             if calc_status == "ROOT":
                 db2_key = ""
 
-            if calc_status == "DESCENDANT" and not is_date:
+            if is_group:
+                db2_key = ""
+
+            if calc_status == "DESCENDANT" and not is_date and not is_group:
                 db2_key = self.add_pk_to_db2_key(
                     db2_key=db2_key,
                 )
@@ -266,6 +296,7 @@ class ExcelSheetMappingService:
             row["IDMS Key"] = self.idms_key_label(
                 calc_status=calc_status,
                 is_date=is_date,
+                is_group=is_group,
                 db2_key=db2_key,
             )
             row["IDMS PIC Clause"] = self.get_field_picture(field=field)
@@ -311,11 +342,13 @@ class ExcelSheetMappingService:
                 row["New DB2 Record"] = ""
                 row["New DB2 Field name"] = ""
                 row["New DB2 Data Type"] = ""
+                row["DB2 Key"] = ""
 
             elif is_group:
                 row["New DB2 Record"] = ""
                 row["New DB2 Field name"] = ""
                 row["New DB2 Data Type"] = ""
+                row["DB2 Key"] = ""
 
             elif self.should_emit_db2_field(field=field):
                 row["New DB2 Record"] = self.db2_record_name(
@@ -355,18 +388,6 @@ class ExcelSheetMappingService:
         record,
         fields,
     ) -> dict[str, str]:
-        """
-        Restores CALC marking in Excel IDMS Key column.
-
-        Behavior:
-        - If record.primary_key points to a group:
-          group row = ROOT, descendants = DESCENDANT.
-        - ROOT does not display CALC.
-        - DESCENDANT displays CALC unless date/date-part.
-        - If primary_key points to an elementary field:
-          the field itself is DESCENDANT so it displays CALC.
-        """
-
         scope: dict[str, str] = {}
 
         primary_key = getattr(record, "primary_key", None)
@@ -483,9 +504,13 @@ class ExcelSheetMappingService:
         self,
         calc_status: str,
         is_date: bool,
+        is_group: bool,
         db2_key: str,
     ) -> str:
         if is_date:
+            return ""
+
+        if is_group:
             return ""
 
         labels: list[str] = []
@@ -521,9 +546,17 @@ class ExcelSheetMappingService:
         ]
 
         if "PK" not in parts:
-            parts.append("PK")
+            parts.insert(0, "PK")
 
-        return "/".join(parts)
+        ordered_parts: list[str] = []
+
+        if "PK" in parts:
+            ordered_parts.append("PK")
+
+        if "FK" in parts:
+            ordered_parts.append("FK")
+
+        return "/".join(ordered_parts)
 
     def force_pic_based_datatypes(
         self,
@@ -563,15 +596,9 @@ class ExcelSheetMappingService:
 
         for table in getattr(db2_model, "tables", []) or []:
             table_name = getattr(table, "name", "") or ""
-            normalized_table_name = NameNormalizer.normalize(table_name)
 
-            if normalized_table_name:
-                lookup[normalized_table_name] = table
-
-            suffix_removed = self.remove_record_suffix(normalized_table_name)
-
-            if suffix_removed:
-                lookup[suffix_removed] = table
+            for key in self.name_lookup_keys(table_name):
+                lookup[key] = table
 
         return lookup
 
@@ -583,15 +610,9 @@ class ExcelSheetMappingService:
 
         for column in getattr(table, "columns", []) or []:
             column_name = getattr(column, "name", "") or ""
-            normalized_column_name = NameNormalizer.normalize(column_name)
 
-            if normalized_column_name:
-                lookup[normalized_column_name] = column
-
-            suffix_removed = self.remove_record_suffix(normalized_column_name)
-
-            if suffix_removed:
-                lookup[suffix_removed] = column
+            for key in self.name_lookup_keys(column_name):
+                lookup[key] = column
 
         return lookup
 
@@ -819,15 +840,9 @@ class ExcelSheetMappingService:
         record_name: str,
         table_lookup: dict[str, DB2Table],
     ) -> DB2Table | None:
-        normalized_record_name = NameNormalizer.normalize(record_name or "")
-
-        if normalized_record_name in table_lookup:
-            return table_lookup[normalized_record_name]
-
-        suffix_removed = self.remove_record_suffix(normalized_record_name)
-
-        if suffix_removed in table_lookup:
-            return table_lookup[suffix_removed]
+        for key in self.name_lookup_keys(record_name):
+            if key in table_lookup:
+                return table_lookup[key]
 
         return None
 
@@ -837,7 +852,7 @@ class ExcelSheetMappingService:
         field,
         column_lookup: dict[str, DB2Column],
     ) -> DB2Column | None:
-        field_name = NameNormalizer.normalize(getattr(field, "name", "") or "")
+        field_name = getattr(field, "name", "") or ""
 
         if not field_name:
             return None
@@ -845,6 +860,8 @@ class ExcelSheetMappingService:
         possible_names = [
             field_name,
             self.remove_record_suffix(field_name),
+            self.cobol_field_base_name(field_name=field_name),
+            self.date_field_base_name(field_name=field_name),
             self.convert_cobol_zone_to_db2_field_name(record=record, field=field),
             self.convert_date_field_to_db2_field_name(record=record, field=field),
         ]
@@ -865,18 +882,22 @@ class ExcelSheetMappingService:
         normalized_column_name: str,
         column_lookup: dict[str, DB2Column],
     ) -> DB2Column | None:
-        normalized_column_name = NameNormalizer.normalize(normalized_column_name or "")
-
-        if normalized_column_name in column_lookup:
-            return column_lookup[normalized_column_name]
+        for key in self.name_lookup_keys(normalized_column_name):
+            if key in column_lookup:
+                return column_lookup[key]
 
         suffix_removed = self.remove_record_suffix(normalized_column_name)
 
-        if suffix_removed in column_lookup:
-            return column_lookup[suffix_removed]
+        for key in self.name_lookup_keys(suffix_removed):
+            if key in column_lookup:
+                return column_lookup[key]
+
+        target_suffix_removed = self.remove_record_suffix(
+            self.to_db2_name(normalized_column_name)
+        )
 
         for current_name, column in column_lookup.items():
-            if self.remove_record_suffix(current_name) == suffix_removed:
+            if self.remove_record_suffix(current_name) == target_suffix_removed:
                 return column
 
         return None
@@ -990,10 +1011,7 @@ class ExcelSheetMappingService:
         rows: list[dict[str, str]] = []
         cobol_record_name = getattr(record, "name", "") or ""
 
-        column_lookup = {
-            NameNormalizer.normalize(getattr(column, "name", "") or ""): column
-            for column in getattr(table, "columns", []) or []
-        }
+        column_lookup = self.build_column_lookup(table=table)
 
         for foreign_key in getattr(table, "foreign_keys", []) or []:
             fk_column_name = self.get_foreign_key_column_name(foreign_key=foreign_key)
@@ -1001,7 +1019,10 @@ class ExcelSheetMappingService:
             if not fk_column_name:
                 continue
 
-            fk_column = column_lookup.get(NameNormalizer.normalize(fk_column_name))
+            fk_column = self.find_matching_column(
+                normalized_column_name=fk_column_name,
+                column_lookup=column_lookup,
+            )
 
             if fk_column is None:
                 continue
@@ -1132,6 +1153,15 @@ class ExcelSheetMappingService:
         self,
         foreign_key,
     ) -> str:
+        if isinstance(foreign_key, dict):
+            return str(
+                foreign_key.get("column_name")
+                or foreign_key.get("column")
+                or foreign_key.get("fk_column")
+                or foreign_key.get("foreign_key_column")
+                or "",
+            )
+
         return str(
             getattr(foreign_key, "column_name", None)
             or getattr(foreign_key, "column", None)
@@ -1349,18 +1379,47 @@ class ExcelSheetMappingService:
         field_name: str,
     ) -> str:
         normalized = self.to_db2_name(field_name)
-        normalized = re.sub(r"_[0-9]{4}$", "", normalized)
+        normalized = self.remove_record_suffix(normalized)
 
-        return normalized
+        parts = [
+            part
+            for part in normalized.split("_")
+            if part
+        ]
+
+        if not parts:
+            return normalized
+
+        parts = self.remove_generic_trailing_tokens(parts=parts)
+
+        parts = [
+            self.PROJECT_ABBREVIATIONS.get(part, part)
+            for part in parts
+        ]
+
+        if len(parts) == 1:
+            return parts[0]
+
+        first = parts[0]
+        rest = "".join(parts[1:])
+
+        if rest:
+            return f"{first}_{rest}"
+
+        return first
 
     def date_field_base_name(
         self,
         field_name: str,
     ) -> str:
         normalized = self.to_db2_name(field_name)
-        normalized = re.sub(r"_[0-9]{4}$", "", normalized)
+        normalized = self.remove_record_suffix(normalized)
 
-        parts = [part for part in normalized.split("_") if part]
+        parts = [
+            part
+            for part in normalized.split("_")
+            if part
+        ]
 
         if not parts:
             return normalized
@@ -1370,24 +1429,64 @@ class ExcelSheetMappingService:
         else:
             main_parts = parts
 
-        cleaned_parts = [
-            part
-            for part in main_parts
-            if part not in {"GDIFC", "GDIFR", "GDIFAR", "SIC", "FC"}
-        ]
-
-        if not cleaned_parts:
-            cleaned_parts = main_parts
-
-        main = "_".join(cleaned_parts)
-
-        if main in {"UB", "UE"}:
-            main = f"{main}DATE"
-
-        if not main:
+        if not main_parts:
             return "DA"
 
+        if main_parts[0] in {"UB", "UE"}:
+            return f"DA_{main_parts[0]}DATE"
+
+        main_parts = self.apply_date_project_abbreviations(
+            parts=main_parts,
+        )
+
+        main_parts = self.remove_generic_trailing_tokens(
+            parts=main_parts,
+        )
+
+        if not main_parts:
+            return "DA"
+
+        if len(main_parts) == 1:
+            main = main_parts[0]
+        else:
+            main = "".join(main_parts)
+
         return f"DA_{main}"
+
+    def apply_date_project_abbreviations(
+        self,
+        parts: list[str],
+    ) -> list[str]:
+        output: list[str] = []
+
+        for part in parts:
+            if part == "EVPRCP":
+                output.append("ERCP")
+                continue
+
+            if part == "GDIFAR":
+                output.append("GD")
+                continue
+
+            if part in {"GDIFC", "GDIFR"}:
+                continue
+
+            output.append(
+                self.PROJECT_ABBREVIATIONS.get(part, part)
+            )
+
+        return output
+
+    def remove_generic_trailing_tokens(
+        self,
+        parts: list[str],
+    ) -> list[str]:
+        output = list(parts or [])
+
+        while output and output[-1] in self.GENERIC_TRAILING_TOKENS:
+            output.pop()
+
+        return output
 
     def record_code(
         self,
@@ -1567,6 +1666,38 @@ class ExcelSheetMappingService:
         row["Cobol Zone"] = self.format_cobol_level_and_name(level=1, name=record_name)
 
         return row
+
+    def name_lookup_keys(
+        self,
+        value: str,
+    ) -> list[str]:
+        keys: list[str] = []
+
+        candidates = [
+            value,
+            NameNormalizer.normalize(value or ""),
+            self.to_db2_name(value or ""),
+            self.remove_record_suffix(value or ""),
+            self.remove_record_suffix(NameNormalizer.normalize(value or "")),
+            self.remove_record_suffix(self.to_db2_name(value or "")),
+        ]
+
+        for candidate in candidates:
+            candidate_text = str(candidate or "").strip()
+
+            if not candidate_text:
+                continue
+
+            normalized_name = NameNormalizer.normalize(candidate_text)
+            db2_name = self.to_db2_name(candidate_text)
+
+            for key in [candidate_text, normalized_name, db2_name]:
+                key = str(key or "").strip()
+
+                if key and key not in keys:
+                    keys.append(key)
+
+        return keys
 
     def format_cobol_zone(
         self,

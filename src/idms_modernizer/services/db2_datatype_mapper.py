@@ -8,14 +8,31 @@ class DB2DatatypeMapper:
     Rules:
     - PIC X(n) -> CHAR(n)
     - PIC X repeated -> CHAR(length)
+
     - PIC 9(n) -> DECIMAL(n)
     - PIC S9(n) -> DECIMAL(n)
+
     - PIC 9(n) COMP-3 -> DECIMAL(n,0)
     - PIC S9(n) COMP-3 -> DECIMAL(n,0)
+
     - PIC 9(n)V9(m) -> DECIMAL(n+m,m)
     - PIC S9(n)V9(m) -> DECIMAL(n+m,m)
+
     - PIC 9(n)V9(m) COMP-3 -> DECIMAL(n+m,m)
     - PIC S9(n)V9(m) COMP-3 -> DECIMAL(n+m,m)
+
+    - PIC 9(n)V99 -> DECIMAL(n+2,2)
+    - PIC S9(n)V99 -> DECIMAL(n+2,2)
+
+    - PIC 9(n)V99 COMP-3 -> DECIMAL(n+2,2)
+    - PIC S9(n)V99 COMP-3 -> DECIMAL(n+2,2)
+
+    Important:
+    - Do not merge implied-decimal PICs.
+    - PIC S9(13)V9(2) COMP-3 must map to DECIMAL(15,2).
+    - PIC S9(13)V99 COMP-3 must map to DECIMAL(15,2).
+    - It must not be treated as PIC S9(15) COMP-3.
+
     - DATE -> DATE
     - TIMESTAMP / DATETIME -> TIMESTAMP
     """
@@ -119,12 +136,14 @@ class DB2DatatypeMapper:
                 picture=core,
                 fallback_length=fallback_length,
             )
+
             return f"CHAR({length})"
 
         if DB2DatatypeMapper.picture_is_decimal(core):
             precision, scale = DB2DatatypeMapper.decimal_precision_scale(
                 picture=core,
             )
+
             return DB2DatatypeMapper.format_decimal(
                 precision=precision,
                 scale=scale,
@@ -155,19 +174,34 @@ class DB2DatatypeMapper:
                 value=fallback_length,
                 default=DB2DatatypeMapper.DEFAULT_CHAR_LENGTH,
             )
+
             return f"CHAR({actual_length})"
 
         return f"CHAR({DB2DatatypeMapper.DEFAULT_CHAR_LENGTH})"
 
     @staticmethod
-    def clean_picture(picture: str) -> str:
+    def clean_picture(
+        picture: str,
+    ) -> str:
         value = str(picture or "").strip().upper()
 
-        value = value.replace("PICTURE", "")
-        value = value.replace("PIC", "")
-        value = value.replace(".", "")
         value = value.replace("\u00a0", " ")
         value = value.replace("\t", " ")
+        value = value.replace(".", "")
+
+        value = re.sub(
+            r"\bPICTURE\b",
+            "",
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        value = re.sub(
+            r"\bPIC\b",
+            "",
+            value,
+            flags=re.IGNORECASE,
+        )
 
         value = re.sub(r"\s+", " ", value).strip()
 
@@ -181,26 +215,48 @@ class DB2DatatypeMapper:
         return value
 
     @staticmethod
-    def picture_core(picture: str) -> str:
+    def picture_core(
+        picture: str,
+    ) -> str:
         value = str(picture or "").strip().upper()
+
+        value = value.replace("\u00a0", " ")
+        value = value.replace("\t", " ")
 
         value = value.replace("COMP-3", "")
         value = re.sub(r"\bCOMP\b", "", value)
-        value = value.replace("DISPLAY", "")
-        value = value.replace("USAGE", "")
-        value = value.replace("IS", "")
-        value = value.replace("SIGN", "")
-        value = value.replace("LEADING", "")
-        value = value.replace("TRAILING", "")
-        value = value.replace("SEPARATE", "")
-        value = value.replace("CHARACTER", "")
+        value = re.sub(r"\bDISPLAY\b", "", value)
+        value = re.sub(r"\bUSAGE\b", "", value)
+        value = re.sub(r"\bIS\b", "", value)
+        value = re.sub(r"\bSIGN\b", "", value)
+        value = re.sub(r"\bLEADING\b", "", value)
+        value = re.sub(r"\bTRAILING\b", "", value)
+        value = re.sub(r"\bSEPARATE\b", "", value)
+        value = re.sub(r"\bCHARACTER\b", "", value)
 
+        value = re.sub(
+            r"\bPICTURE\b",
+            "",
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        value = re.sub(
+            r"\bPIC\b",
+            "",
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        value = value.replace(".", "")
         value = re.sub(r"\s+", "", value).strip()
 
         return value
 
     @staticmethod
-    def picture_is_char(picture: str) -> bool:
+    def picture_is_char(
+        picture: str,
+    ) -> bool:
         value = str(picture or "").strip().upper()
 
         if value.startswith("X(") and value.endswith(")"):
@@ -212,7 +268,9 @@ class DB2DatatypeMapper:
         return False
 
     @staticmethod
-    def picture_is_numeric(picture: str) -> bool:
+    def picture_is_numeric(
+        picture: str,
+    ) -> bool:
         value = str(picture or "").strip().upper()
 
         if value.startswith("S"):
@@ -230,7 +288,9 @@ class DB2DatatypeMapper:
         return False
 
     @staticmethod
-    def picture_is_decimal(picture: str) -> bool:
+    def picture_is_decimal(
+        picture: str,
+    ) -> bool:
         value = str(picture or "").strip().upper()
 
         if value.startswith("S"):
@@ -273,6 +333,7 @@ class DB2DatatypeMapper:
             precision, _scale = DB2DatatypeMapper.decimal_precision_scale(
                 picture=picture,
             )
+
             return precision
 
         if value.startswith("9(") and value.endswith(")"):
@@ -290,7 +351,9 @@ class DB2DatatypeMapper:
         )
 
     @staticmethod
-    def decimal_precision_scale(picture: str) -> tuple[int, int]:
+    def decimal_precision_scale(
+        picture: str,
+    ) -> tuple[int, int]:
         value = str(picture or "").strip().upper()
 
         if value.startswith("S"):
@@ -301,6 +364,7 @@ class DB2DatatypeMapper:
                 picture=value,
                 fallback_length=DB2DatatypeMapper.DEFAULT_DECIMAL_PRECISION,
             )
+
             return precision, 0
 
         before_v, after_v = value.split("V", 1)
@@ -312,10 +376,15 @@ class DB2DatatypeMapper:
             value=after_v,
         )
 
-        return integer_digits + decimal_digits, decimal_digits
+        precision = integer_digits + decimal_digits
+        scale = decimal_digits
+
+        return precision, scale
 
     @staticmethod
-    def count_9_digits(value: str) -> int:
+    def count_9_digits(
+        value: str,
+    ) -> int:
         text = str(value or "").strip().upper()
 
         if text.startswith("S"):
@@ -325,9 +394,9 @@ class DB2DatatypeMapper:
         index = 0
 
         while index < len(text):
-            char = text[index]
+            current_character = text[index]
 
-            if char != "9":
+            if current_character != "9":
                 index += 1
                 continue
 
@@ -348,13 +417,19 @@ class DB2DatatypeMapper:
         return total
 
     @staticmethod
-    def extract_parenthesized_int(value: str) -> int | None:
+    def extract_parenthesized_int(
+        value: str,
+    ) -> int | None:
         text = str(value or "").strip()
 
         open_index = text.find("(")
+
+        if open_index == -1:
+            return None
+
         close_index = text.find(")", open_index + 1)
 
-        if open_index == -1 or close_index == -1:
+        if close_index == -1:
             return None
 
         number_text = text[open_index + 1:close_index].strip()
@@ -378,6 +453,12 @@ class DB2DatatypeMapper:
             value=scale,
             default=DB2DatatypeMapper.DEFAULT_DECIMAL_SCALE,
         )
+
+        if actual_precision <= 0:
+            actual_precision = DB2DatatypeMapper.DEFAULT_DECIMAL_PRECISION
+
+        if actual_scale < 0:
+            actual_scale = 0
 
         if force_scale or actual_scale > 0:
             return f"DECIMAL({actual_precision},{actual_scale})"

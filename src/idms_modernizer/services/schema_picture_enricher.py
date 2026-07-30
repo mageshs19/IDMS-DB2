@@ -4,7 +4,7 @@ from idms_modernizer.domain.schema_models import DataField
 from idms_modernizer.services.name_normalizer import NameNormalizer
 
 
-print("LOADED SchemaPictureEnricher VERSION DEBUG-PIC-STRT-LGTH-2026-07-29")
+print("LOADED SchemaPictureEnricher VERSION FIX-PIC-PAREN-PRESERVE-V-2026-07-29")
 
 
 class SchemaPictureEnricher:
@@ -16,13 +16,21 @@ class SchemaPictureEnricher:
     - DISPLAY X(n) -> PIC X(n)
     - DISPLAY 9(n) -> PIC 9(n)
     - DISPLAY 9(n)V9(m) -> PIC 9(n)V9(m)
+    - DISPLAY S9(n)V9(m) -> PIC S9(n)V9(m)
     - COMP-3 9(n) -> PIC 9(n) COMP-3
+    - COMP-3 S9(n) -> PIC S9(n) COMP-3
     - COMP-3 S9(n)V9(m) -> PIC S9(n)V9(m) COMP-3
+    - COMP-3 S9(n)V99 -> PIC S9(n)V9(2) COMP-3
     - COMP 9(n) -> PIC 9(n) COMP
     - Group items do not get PIC.
     - OCCURS does not change PIC.
     - Keys do not change PIC.
     - END = STRT + LGTH - 1.
+
+    Critical:
+    - Do not merge implied decimal fields.
+    - PIC S9(13)V9(2) COMP-3 must remain PIC S9(13)V9(2) COMP-3.
+    - It must not become PIC S9(15) COMP-3.
     """
 
     FIELD_START_PATTERN = re.compile(
@@ -118,7 +126,7 @@ class SchemaPictureEnricher:
         debug_label: str = "",
     ) -> list[DataField]:
         print(
-            "USING SchemaPictureEnricher.enrich VERSION DEBUG-PIC-STRT-LGTH-2026-07-29",
+            "USING SchemaPictureEnricher.enrich VERSION FIX-PIC-PAREN-PRESERVE-V-2026-07-29",
             f"debug_label={debug_label}",
         )
 
@@ -608,11 +616,11 @@ class SchemaPictureEnricher:
 
         score = 0
 
+        if "V" in text:
+            score += 1000
+
         if "(" in text and ")" in text:
             score += 100
-
-        if "V" in text:
-            score += 50
 
         if text.startswith("S"):
             score += 10
@@ -650,17 +658,9 @@ class SchemaPictureEnricher:
         if not picture:
             return None
 
-        normalized_picture = self.reconstruct_picture_if_needed(
+        normalized_picture = self.normalize_picture_preserving_v(
             picture=picture,
-            usage=usage,
             storage_length=storage_length,
-        )
-
-        if not normalized_picture:
-            return None
-
-        normalized_picture = self.format_picture_spacing(
-            picture=normalized_picture,
         )
 
         if not normalized_picture:
@@ -677,85 +677,95 @@ class SchemaPictureEnricher:
 
         return f"PIC {normalized_picture}"
 
-    def reconstruct_picture_if_needed(
+    def normalize_picture_preserving_v(
         self,
         picture: str | None,
-        usage: str,
-        storage_length: int | None,
+        storage_length: int | None = None,
     ) -> str | None:
         if not picture:
             return None
 
-        usage_upper = str(usage or "").upper()
         core = self.picture_core(picture)
 
         if not core:
-            return picture
-
-        if "(" in core and ")" in core:
-            return self.format_picture_spacing(core)
+            return None
 
         if "V" in core:
-            return self.format_picture_spacing(core)
+            before_v, after_v = core.split("V", 1)
 
-        if core == "X":
-            if storage_length and storage_length > 1:
-                return f"X({storage_length})"
+            before_v_normalized = self.normalize_9_part(
+                part=before_v,
+                storage_length=None,
+            )
+            after_v_normalized = self.normalize_9_part(
+                part=after_v,
+                storage_length=None,
+            )
 
-            return "X"
+            return f"{before_v_normalized}V{after_v_normalized}"
 
-        if core in {"9", "S9"}:
-            signed = core.startswith("S")
+        if core.startswith("X"):
+            return self.normalize_x_part(
+                part=core,
+                storage_length=storage_length,
+            )
 
-            if usage_upper == "COMP-3":
-                precision = self.comp3_precision_from_storage(
-                    storage_length=storage_length,
-                )
+        return self.normalize_9_part(
+            part=core,
+            storage_length=storage_length,
+        )
 
-                if precision:
-                    return f"{'S' if signed else ''}9({precision})"
-
-            if storage_length and storage_length > 1:
-                return f"{'S' if signed else ''}9({storage_length})"
-
-            return core
-
-        return self.format_picture_spacing(core)
-
-    def comp3_precision_from_storage(
+    def normalize_x_part(
         self,
-        storage_length: int | None,
-    ) -> int | None:
-        if storage_length is None:
-            return None
+        part: str,
+        storage_length: int | None = None,
+    ) -> str:
+        text = str(part or "").upper()
 
-        try:
-            length = int(storage_length)
-        except Exception:
-            return None
+        if text.startswith("X(") and text.endswith(")"):
+            return text
 
-        if length <= 0:
-            return None
+        if set(text) == {"X"}:
+            if len(text) == 1 and storage_length and int(storage_length) > 1:
+                return f"X({int(storage_length)})"
 
-        return (length * 2) - 1
+            if len(text) == 1:
+                return "X"
 
-    def format_picture_spacing(
-        self,
-        picture: str | None,
-    ) -> str | None:
-        if not picture:
-            return None
-
-        text = str(picture).upper().strip()
-        text = text.replace("\u00a0", " ")
-        text = text.replace("\t", " ")
-        text = re.sub(r"\s+", "", text)
-
-        text = text.replace("COMP-3", " COMP-3")
-        text = re.sub(r"\bCOMP\b", " COMP", text)
-        text = re.sub(r"\s+", " ", text).strip()
+            return f"X({len(text)})"
 
         return text
+
+    def normalize_9_part(
+        self,
+        part: str,
+        storage_length: int | None = None,
+    ) -> str:
+        text = str(part or "").upper()
+
+        signed = False
+
+        if text.startswith("S"):
+            signed = True
+            text = text[1:]
+
+        if text.startswith("9(") and text.endswith(")"):
+            return f"{'S' if signed else ''}{text}"
+
+        count = self.count_9_digits(
+            value=text,
+        )
+
+        if count <= 0:
+            return f"{'S' if signed else ''}{text}"
+
+        if count == 1 and storage_length and int(storage_length) > 1:
+            return f"{'S' if signed else ''}9({int(storage_length)})"
+
+        if count == 1:
+            return f"{'S' if signed else ''}9"
+
+        return f"{'S' if signed else ''}9({count})"
 
     def derive_type_from_picture(
         self,
