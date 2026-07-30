@@ -3,35 +3,31 @@ import re
 from idms_modernizer.domain.schema_models import DataField
 from idms_modernizer.services.name_normalizer import NameNormalizer
 
-
-print("LOADED SchemaPictureEnricher VERSION FIX-S9V9-COMP3-PAREN-2026-07-29")
+print("LOADED SchemaPictureEnricher VERSION GENERIC-PIC-PARENS-V-COMP3-FIX-2026-07-30")
 
 
 class SchemaPictureEnricher:
     """
     Enriches DataField objects using schema listing lines.
 
-    Rules implemented:
-    - Build Excel IDMS PIC Clause from schema PICTURE + USAGE.
-    - DISPLAY X(n) -> PIC X(n)
-    - DISPLAY 9(n) -> PIC 9(n)
-    - DISPLAY 9(n)V9(m) -> PIC 9(n)V9(m)
-    - DISPLAY S9(n)V9(m) -> PIC S9(n)V9(m)
-    - COMP-3 9(n) -> PIC 9(n) COMP-3
-    - COMP-3 S9(n) -> PIC S9(n) COMP-3
-    - COMP-3 S9(n)V9(m) -> PIC S9(n)V9(m) COMP-3
-    - COMP-3 S9(n)V99 -> PIC S9(n)V9(2) COMP-3
-    - COMP 9(n) -> PIC 9(n) COMP
-    - Group items do not get PIC.
-    - OCCURS does not change PIC.
-    - Keys do not change PIC.
-    - END = STRT + LGTH - 1.
-
-    Critical:
-    - Do not merge implied decimal fields.
+    Critical rules:
+    - IDMS PIC Clause must come from schema PICTURE, not byte length.
+    - PIC S9(13)V9(2) must remain PIC S9(13)V9(2).
     - PIC S9(13)V9(2) COMP-3 must remain PIC S9(13)V9(2) COMP-3.
-    - It must not become PIC S9(15) COMP-3.
+    - Do not convert PIC S9(13)V9(2) to PIC S9(8).
+    - Do not convert PIC 9(8) COMP-3 to PIC 9(5) COMP-3.
+    - Storage length remains byte length.
+    - Numeric logical precision comes from PIC.
+
+    Generic behavior:
+    - No hardcoded record names.
+    - No hardcoded field names.
+    - No hardcoded application-specific debug target list.
+    - Debug is controlled by DEBUG / DEBUG_VERBOSE only.
     """
+
+    DEBUG = True
+    DEBUG_VERBOSE = False
 
     FIELD_START_PATTERN = re.compile(
         r"^\s*(?P<level>0[1-9]|[1-4][0-9]|88)\s+"
@@ -50,39 +46,15 @@ class SchemaPictureEnricher:
         re.IGNORECASE,
     )
 
-    PIC_PATTERNS = [
-        re.compile(
-            r"S?\s*9\s*$\s*\d+\s*$\s*V\s*9\s*$\s*\d+\s*$",
-            re.IGNORECASE,
-        ),
-        re.compile(
-            r"S?\s*9\s*$\s*\d+\s*$\s*V\s*9+",
-            re.IGNORECASE,
-        ),
-        re.compile(
-            r"S?\s*9+\s*V\s*9\s*$\s*\d+\s*$",
-            re.IGNORECASE,
-        ),
-        re.compile(
-            r"S?\s*9+\s*V\s*9+",
-            re.IGNORECASE,
-        ),
-        re.compile(
-            r"S?\s*9\s*$\s*\d+\s*$",
-            re.IGNORECASE,
-        ),
-        re.compile(
-            r"S?\s*[90]+",
-            re.IGNORECASE,
-        ),
-        re.compile(
-            r"X\s*$\s*\d+\s*$",
-            re.IGNORECASE,
-        ),
-        re.compile(
-            r"X+",
-            re.IGNORECASE,
-        ),
+    COMPACT_PIC_PATTERNS = [
+        re.compile(r"S?9[(][0-9]+[)]V9[(][0-9]+[)]", re.IGNORECASE),
+        re.compile(r"S?9[(][0-9]+[)]V[90]+", re.IGNORECASE),
+        re.compile(r"S?[90]+V9[(][0-9]+[)]", re.IGNORECASE),
+        re.compile(r"S?[90]+V[90]+", re.IGNORECASE),
+        re.compile(r"S?9[(][0-9]+[)]", re.IGNORECASE),
+        re.compile(r"S?[90]+", re.IGNORECASE),
+        re.compile(r"X[(][0-9]+[)]", re.IGNORECASE),
+        re.compile(r"X+", re.IGNORECASE),
     ]
 
     DATE_NAME_TOKENS = {
@@ -125,27 +97,21 @@ class SchemaPictureEnricher:
         lines: list[str],
         debug_label: str = "",
     ) -> list[DataField]:
-        print(
-            "USING SchemaPictureEnricher.enrich VERSION FIX-S9V9-COMP3-PAREN-2026-07-29",
-            f"debug_label={debug_label}",
-        )
+        if self.DEBUG:
+            print(
+                "USING SchemaPictureEnricher.enrich VERSION GENERIC-PIC-PARENS-V-COMP3-FIX-2026-07-30",
+                f"debug_label={debug_label}",
+            )
 
         normalized_lines = self.normalize_lines(
             lines=lines,
         )
 
-        print(
-            "SCHEMA_ENRICH_DEBUG_LINES",
-            f"debug_label={debug_label}",
-            f"line_count={len(normalized_lines)}",
-        )
-
-        for index, line in enumerate(normalized_lines[:80]):
+        if self.DEBUG:
             print(
-                "SCHEMA_LINE_DEBUG",
+                "SCHEMA_ENRICH_DEBUG_LINES",
                 f"debug_label={debug_label}",
-                f"index={index}",
-                f"line={repr(line)}",
+                f"line_count={len(normalized_lines)}",
             )
 
         field_blocks = self.build_field_blocks(
@@ -164,11 +130,12 @@ class SchemaPictureEnricher:
             )
 
             if not block:
-                print(
-                    "SCHEMA_ENRICH_NO_BLOCK",
-                    f"debug_label={debug_label}",
-                    f"field={repr(field_name)}",
-                )
+                if self.DEBUG:
+                    print(
+                        "SCHEMA_ENRICH_NO_BLOCK",
+                        f"debug_label={debug_label}",
+                        f"field={repr(field_name)}",
+                    )
 
                 enriched_fields.append(
                     self.copy_field_with_defaults(
@@ -177,13 +144,13 @@ class SchemaPictureEnricher:
                 )
                 continue
 
-            enriched = self.enrich_field(
-                field=field,
-                block=block,
-                debug_label=debug_label,
+            enriched_fields.append(
+                self.enrich_field(
+                    field=field,
+                    block=block,
+                    debug_label=debug_label,
+                )
             )
-
-            enriched_fields.append(enriched)
 
         enriched_fields = self.enrich_group_positions_from_children(
             fields=enriched_fields,
@@ -242,12 +209,13 @@ class SchemaPictureEnricher:
                 )
             )
 
-        print(
-            "SCHEMA_BLOCK_STARTS_DEBUG",
-            f"debug_label={debug_label}",
-            f"starts_count={len(starts)}",
-            f"starts={starts[:80]}",
-        )
+        if self.DEBUG:
+            print(
+                "SCHEMA_BLOCK_STARTS_DEBUG",
+                f"debug_label={debug_label}",
+                f"starts_count={len(starts)}",
+                f"starts={starts[:80]}",
+            )
 
         blocks: dict[str, str] = {}
 
@@ -270,16 +238,17 @@ class SchemaPictureEnricher:
             if normalized_field_name:
                 blocks[normalized_field_name] = block
 
-                suffix_removed = self.remove_record_suffix(
-                    value=normalized_field_name,
+            suffix_removed = self.remove_record_suffix(
+                value=normalized_field_name,
+            )
+
+            if suffix_removed:
+                blocks.setdefault(
+                    suffix_removed,
+                    block,
                 )
 
-                if suffix_removed:
-                    blocks.setdefault(
-                        suffix_removed,
-                        block,
-                    )
-
+            if self.DEBUG_VERBOSE:
                 print(
                     "SCHEMA_BLOCK_DEBUG",
                     f"debug_label={debug_label}",
@@ -326,7 +295,9 @@ class SchemaPictureEnricher:
         field_name = getattr(field, "name", "") or ""
 
         if not block:
-            return self.copy_field_with_defaults(field=field)
+            return self.copy_field_with_defaults(
+                field=field,
+            )
 
         parsed_line = self.parse_schema_block(
             block=block,
@@ -345,15 +316,6 @@ class SchemaPictureEnricher:
         )
 
         if is_group:
-            print(
-                "SCHEMA_ENRICH_GROUP",
-                f"debug_label={debug_label}",
-                f"field={repr(field_name)}",
-                f"start={start_position}",
-                f"length={storage_length}",
-                f"picture=None",
-            )
-
             return self.make_field(
                 source=field,
                 datatype=getattr(field, "datatype", None),
@@ -402,19 +364,23 @@ class SchemaPictureEnricher:
         if actual_length is None:
             actual_length = logical_length
 
-        print(
-            "SCHEMA_ENRICH_RESULT",
-            f"debug_label={debug_label}",
-            f"field={repr(field_name)}",
-            f"usage={repr(usage)}",
-            f"picture_core={repr(picture_core)}",
-            f"rendered_picture={repr(rendered_picture)}",
-            f"datatype={repr(datatype)}",
-            f"length={actual_length}",
-            f"scale={scale}",
-            f"start={start_position}",
-            f"end={end_position}",
-        )
+        if self.DEBUG_VERBOSE:
+            print(
+                "SCHEMA_ENRICH_RESULT",
+                f"debug_label={debug_label}",
+                f"field={repr(field_name)}",
+                f"block={repr(block)}",
+                f"usage={repr(usage)}",
+                f"picture_core={repr(picture_core)}",
+                f"rendered_picture={repr(rendered_picture)}",
+                f"datatype={repr(datatype)}",
+                f"logical_length={logical_length}",
+                f"storage_length={storage_length}",
+                f"actual_length={actual_length}",
+                f"scale={scale}",
+                f"start={start_position}",
+                f"end={end_position}",
+            )
 
         return self.make_field(
             source=field,
@@ -463,20 +429,23 @@ class SchemaPictureEnricher:
 
         picture_core = self.extract_picture_core(
             value=picture_area,
+            field_name=field_name,
+            debug_label=debug_label,
         )
 
-        print(
-            "SCHEMA_PARSE_DEBUG",
-            f"debug_label={debug_label}",
-            f"field={repr(field_name)}",
-            f"block={repr(block)}",
-            f"usage={repr(usage)}",
-            f"start={start_position}",
-            f"length={storage_length}",
-            f"rest={repr(rest)}",
-            f"picture_area={repr(picture_area)}",
-            f"picture_core={repr(picture_core)}",
-        )
+        if self.DEBUG_VERBOSE:
+            print(
+                "SCHEMA_PARSE_DEBUG",
+                f"debug_label={debug_label}",
+                f"field={repr(field_name)}",
+                f"block={repr(block)}",
+                f"usage={repr(usage)}",
+                f"start={start_position}",
+                f"length={storage_length}",
+                f"rest={repr(rest)}",
+                f"picture_area={repr(picture_area)}",
+                f"picture_core={repr(picture_core)}",
+            )
 
         return {
             "usage": usage,
@@ -574,15 +543,25 @@ class SchemaPictureEnricher:
     def extract_picture_core(
         self,
         value: str,
+        field_name: str = "",
+        debug_label: str = "",
     ) -> str | None:
-        text = str(value or "").upper()
+        original = str(value or "").upper()
+
+        compact = re.sub(r"\s+", "", original)
+        compact = compact.replace("PICTURE", "")
+        compact = compact.replace("PIC", "")
+        compact = compact.replace(".", "")
 
         candidates: list[tuple[int, int, str]] = []
 
-        for pattern in self.PIC_PATTERNS:
-            for match in pattern.finditer(text):
+        for pattern in self.COMPACT_PIC_PATTERNS:
+            for match in pattern.finditer(compact):
                 raw = match.group(0)
-                core = self.clean_picture_core(raw)
+
+                core = self.clean_picture_core(
+                    value=raw,
+                )
 
                 if not core:
                     continue
@@ -599,6 +578,17 @@ class SchemaPictureEnricher:
                     )
                 )
 
+        if self.DEBUG_VERBOSE:
+            print(
+                "PIC_EXTRACT_DEBUG_INPUT",
+                f"debug_label={debug_label}",
+                f"field={repr(field_name)}",
+                f"value={repr(value)}",
+                f"compact={repr(compact)}",
+                f"patterns={[pattern.pattern for pattern in self.COMPACT_PIC_PATTERNS]}",
+                f"candidates_before_sort={candidates}",
+            )
+
         if not candidates:
             return None
 
@@ -606,7 +596,18 @@ class SchemaPictureEnricher:
             key=lambda item: (item[0], item[1]),
         )
 
-        return candidates[-1][2]
+        selected = candidates[-1][2]
+
+        if self.DEBUG_VERBOSE:
+            print(
+                "PIC_EXTRACT_DEBUG_RESULT",
+                f"debug_label={debug_label}",
+                f"field={repr(field_name)}",
+                f"candidates_after_sort={candidates}",
+                f"selected={repr(selected)}",
+            )
+
+        return selected
 
     def picture_score(
         self,
@@ -685,7 +686,9 @@ class SchemaPictureEnricher:
         if not picture:
             return None
 
-        core = self.picture_core(picture)
+        core = self.picture_core(
+            picture,
+        )
 
         if not core:
             return None
@@ -697,6 +700,7 @@ class SchemaPictureEnricher:
                 part=before_v,
                 storage_length=None,
             )
+
             after_v_normalized = self.normalize_9_part(
                 part=after_v,
                 storage_length=None,
@@ -725,7 +729,7 @@ class SchemaPictureEnricher:
         if text.startswith("X(") and text.endswith(")"):
             return text
 
-        if set(text) == {"X"}:
+        if text and set(text) == {"X"}:
             if len(text) == 1 and storage_length and int(storage_length) > 1:
                 return f"X({int(storage_length)})"
 
@@ -742,7 +746,6 @@ class SchemaPictureEnricher:
         storage_length: int | None = None,
     ) -> str:
         text = str(part or "").upper()
-
         signed = False
 
         if text.startswith("S"):
@@ -772,7 +775,7 @@ class SchemaPictureEnricher:
         picture: str | None,
         usage: str,
         storage_length: int | None,
-        fallback_datatype: str | None,
+        fallback_datatype: str | None = None,
     ) -> tuple[str | None, int | None, int | None]:
         if not picture:
             return fallback_datatype, storage_length, None
@@ -788,18 +791,21 @@ class SchemaPictureEnricher:
             length = self.character_length(
                 picture=core,
             )
+
             return "CHAR", length, None
 
         if self.picture_is_decimal(core):
             precision, scale = self.decimal_precision_scale(
                 picture=core,
             )
+
             return "DECIMAL", precision, scale
 
         if self.picture_is_numeric(core):
             precision = self.numeric_precision(
                 picture=core,
             )
+
             return "DECIMAL", precision, 0
 
         return fallback_datatype, storage_length, None
@@ -882,6 +888,7 @@ class SchemaPictureEnricher:
         integer_digits = self.count_9_digits(
             value=before_v,
         )
+
         decimal_digits = self.count_9_digits(
             value=after_v,
         )
@@ -939,7 +946,6 @@ class SchemaPictureEnricher:
         value: str,
     ) -> int | None:
         text = str(value or "")
-
         open_index = text.find("(")
 
         if open_index == -1:

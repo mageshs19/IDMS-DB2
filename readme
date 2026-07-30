@@ -13,5 +13,5 @@ python -m streamlit run app\streamlit_app.py --server.port 8502
 
 streamlit run src/idms_modernizer/ui/schema_listing_only_app.py
 
-
+taskkill /F /IM python.exe
 --
