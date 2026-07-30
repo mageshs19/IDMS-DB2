@@ -32,6 +32,7 @@ class DB2DatatypeMapper:
     - PIC S9(13)V9(2) COMP-3 must map to DECIMAL(15,2).
     - PIC S9(13)V99 COMP-3 must map to DECIMAL(15,2).
     - It must not be treated as PIC S9(15) COMP-3.
+    - Handles lowercase v / comp-3 and spaces around parentheses.
 
     - DATE -> DATE
     - TIMESTAMP / DATETIME -> TIMESTAMP
@@ -57,7 +58,7 @@ class DB2DatatypeMapper:
             or getattr(field, "pic_clause", None)
             or ""
         )
-        picture = str(picture or "").strip().upper()
+        picture = str(picture or "").strip()
 
         length = (
             getattr(field, "length", None)
@@ -124,8 +125,10 @@ class DB2DatatypeMapper:
         if not clean:
             return f"CHAR({DB2DatatypeMapper.DEFAULT_CHAR_LENGTH})"
 
-        has_comp3 = "COMP-3" in clean.upper()
-        has_comp = bool(re.search(r"\bCOMP\b", clean.upper())) and not has_comp3
+        clean_upper = clean.upper()
+
+        has_comp3 = "COMP-3" in clean_upper
+        has_comp = bool(re.search(r"\bCOMP\b", clean_upper)) and not has_comp3
 
         core = DB2DatatypeMapper.picture_core(
             picture=clean,
@@ -273,19 +276,18 @@ class DB2DatatypeMapper:
     ) -> bool:
         value = str(picture or "").strip().upper()
 
+        if not value:
+            return False
+
         if value.startswith("S"):
             value = value[1:]
 
         if "V" in value:
             return False
 
-        if value.startswith("9(") and value.endswith(")"):
-            return DB2DatatypeMapper.extract_parenthesized_int(value) is not None
-
-        if value and set(value) == {"9"}:
-            return True
-
-        return False
+        return DB2DatatypeMapper.is_numeric_picture_part(
+            value=value,
+        )
 
     @staticmethod
     def picture_is_decimal(
@@ -293,10 +295,21 @@ class DB2DatatypeMapper:
     ) -> bool:
         value = str(picture or "").strip().upper()
 
+        if not value:
+            return False
+
         if value.startswith("S"):
             value = value[1:]
 
-        return "V" in value and "9" in value
+        if "V" not in value:
+            return False
+
+        before_v, after_v = value.split("V", 1)
+
+        return (
+            DB2DatatypeMapper.is_numeric_picture_part(before_v)
+            and DB2DatatypeMapper.is_numeric_picture_part(after_v)
+        )
 
     @staticmethod
     def char_length(
@@ -336,14 +349,12 @@ class DB2DatatypeMapper:
 
             return precision
 
-        if value.startswith("9(") and value.endswith(")"):
-            parsed_precision = DB2DatatypeMapper.extract_parenthesized_int(value)
+        precision = DB2DatatypeMapper.count_numeric_digits(
+            value=value,
+        )
 
-            if parsed_precision is not None:
-                return parsed_precision
-
-        if value and set(value) == {"9"}:
-            return len(value)
+        if precision > 0:
+            return precision
 
         return DB2DatatypeMapper.safe_int(
             value=fallback_length,
@@ -369,10 +380,10 @@ class DB2DatatypeMapper:
 
         before_v, after_v = value.split("V", 1)
 
-        integer_digits = DB2DatatypeMapper.count_9_digits(
+        integer_digits = DB2DatatypeMapper.count_numeric_digits(
             value=before_v,
         )
-        decimal_digits = DB2DatatypeMapper.count_9_digits(
+        decimal_digits = DB2DatatypeMapper.count_numeric_digits(
             value=after_v,
         )
 
@@ -382,7 +393,32 @@ class DB2DatatypeMapper:
         return precision, scale
 
     @staticmethod
-    def count_9_digits(
+    def is_numeric_picture_part(
+        value: str,
+    ) -> bool:
+        text = str(value or "").strip().upper()
+
+        if not text:
+            return False
+
+        if text.startswith("S"):
+            text = text[1:]
+
+        count = DB2DatatypeMapper.count_numeric_digits(
+            value=text,
+        )
+
+        if count <= 0:
+            return False
+
+        remaining = DB2DatatypeMapper.remove_numeric_picture_tokens(
+            value=text,
+        )
+
+        return remaining == ""
+
+    @staticmethod
+    def count_numeric_digits(
         value: str,
     ) -> int:
         text = str(value or "").strip().upper()
@@ -396,7 +432,7 @@ class DB2DatatypeMapper:
         while index < len(text):
             current_character = text[index]
 
-            if current_character != "9":
+            if current_character not in {"9", "0"}:
                 index += 1
                 continue
 
@@ -415,6 +451,48 @@ class DB2DatatypeMapper:
             index += 1
 
         return total
+
+    @staticmethod
+    def count_9_digits(
+        value: str,
+    ) -> int:
+        return DB2DatatypeMapper.count_numeric_digits(
+            value=value,
+        )
+
+    @staticmethod
+    def remove_numeric_picture_tokens(
+        value: str,
+    ) -> str:
+        text = str(value or "").strip().upper()
+
+        if text.startswith("S"):
+            text = text[1:]
+
+        result = []
+        index = 0
+
+        while index < len(text):
+            current_character = text[index]
+
+            if current_character not in {"9", "0"}:
+                result.append(current_character)
+                index += 1
+                continue
+
+            if index + 1 < len(text) and text[index + 1] == "(":
+                close_index = text.find(")", index + 2)
+
+                if close_index != -1:
+                    number_text = text[index + 2:close_index].strip()
+
+                    if number_text.isdigit():
+                        index = close_index + 1
+                        continue
+
+            index += 1
+
+        return "".join(result)
 
     @staticmethod
     def extract_parenthesized_int(

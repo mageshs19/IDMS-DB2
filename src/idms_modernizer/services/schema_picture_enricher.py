@@ -4,7 +4,7 @@ from idms_modernizer.domain.schema_models import DataField
 from idms_modernizer.services.name_normalizer import NameNormalizer
 
 
-print("LOADED SchemaPictureEnricher VERSION FIX-PIC-PAREN-PRESERVE-V-2026-07-29")
+print("LOADED SchemaPictureEnricher VERSION FIX-S9V9-COMP3-PAREN-2026-07-29")
 
 
 class SchemaPictureEnricher:
@@ -72,7 +72,7 @@ class SchemaPictureEnricher:
             re.IGNORECASE,
         ),
         re.compile(
-            r"S?\s*9+",
+            r"S?\s*[90]+",
             re.IGNORECASE,
         ),
         re.compile(
@@ -126,7 +126,7 @@ class SchemaPictureEnricher:
         debug_label: str = "",
     ) -> list[DataField]:
         print(
-            "USING SchemaPictureEnricher.enrich VERSION FIX-PIC-PAREN-PRESERVE-V-2026-07-29",
+            "USING SchemaPictureEnricher.enrich VERSION FIX-S9V9-COMP3-PAREN-2026-07-29",
             f"debug_label={debug_label}",
         )
 
@@ -914,7 +914,7 @@ class SchemaPictureEnricher:
         index = 0
 
         while index < len(text):
-            if text[index] != "9":
+            if text[index] not in {"9", "0"}:
                 index += 1
                 continue
 
@@ -1095,15 +1095,6 @@ class SchemaPictureEnricher:
                     group_length = int(group_end) - int(group_start) + 1
             except Exception:
                 pass
-
-            print(
-                "SCHEMA_GROUP_POSITION_DEBUG",
-                f"debug_label={debug_label}",
-                f"group={repr(getattr(field, 'name', None))}",
-                f"start={group_start}",
-                f"length={group_length}",
-                f"end={group_end}",
-            )
 
             output[index] = self.make_field(
                 source=field,
