@@ -8,13 +8,30 @@ from idms_db2_converter.transformers.structured_blocks import StructuredBlocks
 
 
 class ParagraphRewriter:
-    def __init__(self, schema: SchemaModel):
+    """
+    Rewrites IDMS retrieval paragraphs to DB2 SQL blocks.
+
+    Supports:
+    - OBTAIN CALC -> keyed SELECT
+    - OBTAIN NEXT WITHIN set -> cursor fetch / loop
+    - FIND FIRST WITHIN set -> first child SELECT
+    - OBTAIN OWNER WITHIN set -> owner SELECT
+    - Nullable child FK guard before owner SELECT
+    """
+
+    def __init__(
+        self,
+        schema: SchemaModel,
+    ):
         self.schema = schema
         self.sql = SqlSnippets(schema)
         self.fetch_generator = FetchParagraphGenerator(schema)
         self.controlled_loop_sets: set[str] = set()
 
-    def rewrite(self, text: str) -> str:
+    def rewrite(
+        self,
+        text: str,
+    ) -> str:
         text = self._rewrite_cursor_loop_blocks(text)
         text = self._rewrite_find_first_owner_chain_blocks(text)
         text = self._rewrite_empty_else_obtain_owner_blocks(text)
@@ -25,15 +42,23 @@ class ParagraphRewriter:
         text = self._rewrite_remaining_find_first(text)
         text = self._rewrite_remaining_obtain_owner(text)
         text = self._rewrite_status_tokens(text)
+
         return text
 
-    def _rewrite_cursor_loop_blocks(self, text: str) -> str:
+    def _rewrite_cursor_loop_blocks(
+        self,
+        text: str,
+    ) -> str:
         for set_name in self.schema.relationships:
             text = self._rewrite_cursor_loop_for_set(text, set_name)
 
         return text
 
-    def _rewrite_cursor_loop_for_set(self, text: str, set_name: str) -> str:
+    def _rewrite_cursor_loop_for_set(
+        self,
+        text: str,
+        set_name: str,
+    ) -> str:
         pattern = re.compile(
             rf"""
             IF\s+{re.escape(set_name)}\s+IS\s+NOT\s+EMPTY\s+THEN
@@ -42,7 +67,13 @@ class ParagraphRewriter:
             \s+UNTIL\s+DB-END-OF-SET
             \s+ELSE
             (?P<empty_body>.*?)
-            (?=\.\s*READ|\.\s*[A-Z0-9-]+\.)
+            (?=
+                \.\s*READ
+                |
+                \n\s*[A-Z0-9-]+\.
+                |
+                \Z
+            )
             """,
             re.IGNORECASE | re.DOTALL | re.VERBOSE,
         )
@@ -62,10 +93,13 @@ class ParagraphRewriter:
 
         return pattern.sub(replace, text)
 
-    def _rewrite_find_first_owner_chain_blocks(self, text: str) -> str:
+    def _rewrite_find_first_owner_chain_blocks(
+        self,
+        text: str,
+    ) -> str:
         for first_set in self.schema.relationships:
             for owner_set in self.schema.relationships:
-                text = self._rewrite_one_find_first_owner_chain(
+                text = self._rewrite_find_first_owner_chain(
                     text=text,
                     first_set=first_set,
                     owner_set=owner_set,
@@ -73,7 +107,7 @@ class ParagraphRewriter:
 
         return text
 
-    def _rewrite_one_find_first_owner_chain(
+    def _rewrite_find_first_owner_chain(
         self,
         text: str,
         first_set: str,
@@ -99,6 +133,8 @@ class ParagraphRewriter:
                 \n\s*PERFORM\s+
                 |
                 \n\s*[A-Z0-9-]+-EXIT\.
+                |
+                \Z
             )
             """,
             re.IGNORECASE | re.DOTALL | re.VERBOSE,
@@ -108,9 +144,11 @@ class ParagraphRewriter:
             first_empty = self._remove_idms_status_lines(
                 self._clean_block(match.group("first_empty"))
             )
+
             owner_missing = self._remove_idms_status_lines(
                 self._clean_block(match.group("owner_missing"))
             )
+
             success = self._remove_idms_status_lines(
                 self._clean_block(match.group("success"))
             )
@@ -129,7 +167,10 @@ class ParagraphRewriter:
 
         return pattern.sub(replace, text)
 
-    def _rewrite_empty_else_obtain_owner_blocks(self, text: str) -> str:
+    def _rewrite_empty_else_obtain_owner_blocks(
+        self,
+        text: str,
+    ) -> str:
         for set_name in self.schema.relationships:
             pattern = re.compile(
                 rf"""
@@ -144,6 +185,8 @@ class ParagraphRewriter:
                     \n\s*PERFORM\s+
                     |
                     \n\s*[A-Z0-9-]+-EXIT\.
+                    |
+                    \Z
                 )
                 """,
                 re.IGNORECASE | re.DOTALL | re.VERBOSE,
@@ -153,6 +196,7 @@ class ParagraphRewriter:
                 empty_body = self._remove_idms_status_lines(
                     self._clean_block(match.group("empty_body"))
                 )
+
                 success_body = self._remove_idms_status_lines(
                     self._clean_block(match.group("success_body"))
                 )
@@ -183,7 +227,10 @@ class ParagraphRewriter:
 
         return text
 
-    def _rewrite_empty_else_find_first_blocks(self, text: str) -> str:
+    def _rewrite_empty_else_find_first_blocks(
+        self,
+        text: str,
+    ) -> str:
         for set_name in self.schema.relationships:
             pattern = re.compile(
                 rf"""
@@ -195,11 +242,13 @@ class ParagraphRewriter:
                 (?=
                     \n\s*IF\s+[A-Z0-9-]+\s+IS\s+EMPTY
                     |
-                    \n\s*MOVE\s+EMP-DETAIL-LINE
-                    |
                     \n\s*PERFORM\s+
                     |
+                    \n\s*MOVE\s+EMP-DETAIL-LINE
+                    |
                     \n\s*[A-Z0-9-]+-EXIT\.
+                    |
+                    \Z
                 )
                 """,
                 re.IGNORECASE | re.DOTALL | re.VERBOSE,
@@ -209,6 +258,7 @@ class ParagraphRewriter:
                 empty_body = self._remove_idms_status_lines(
                     self._clean_block(match.group("empty_body"))
                 )
+
                 success_body = self._remove_idms_status_lines(
                     self._clean_block(match.group("success_body"))
                 )
@@ -227,7 +277,10 @@ class ParagraphRewriter:
 
         return text
 
-    def _rewrite_obtain_calc_if_blocks(self, text: str) -> str:
+    def _rewrite_obtain_calc_if_blocks(
+        self,
+        text: str,
+    ) -> str:
         pattern = re.compile(
             r"""
             OBTAIN\s+CALC\s+(?P<record>[A-Z0-9-]+)\.?
@@ -236,16 +289,18 @@ class ParagraphRewriter:
             (?P<not_found>.*?)
             ELSE
             (?P<success>.*?)
-            (?=\n\s*READ\s+)
+            (?=\n\s*READ\s+|\Z)
             """,
             re.IGNORECASE | re.DOTALL | re.VERBOSE,
         )
 
         def replace(match: re.Match) -> str:
             record = match.group("record").upper()
+
             not_found = self._remove_idms_status_lines(
                 self._clean_block(match.group("not_found"))
             )
+
             success = self._remove_idms_status_lines(
                 self._clean_block(match.group("success"))
             )
@@ -259,18 +314,24 @@ class ParagraphRewriter:
 
         return pattern.sub(replace, text)
 
-    def _rewrite_remaining_obtain_calc(self, text: str) -> str:
+    def _rewrite_remaining_obtain_calc(
+        self,
+        text: str,
+    ) -> str:
         pattern = re.compile(
             r"^\s*OBTAIN\s+CALC\s+([A-Z0-9-]+)\.?\s*$",
             re.IGNORECASE | re.MULTILINE,
         )
 
         return pattern.sub(
-            lambda m: self.sql.select_for_record_by_pk(m.group(1).upper()),
+            lambda match: self.sql.select_for_record_by_pk(match.group(1).upper()),
             text,
         )
 
-    def _rewrite_remaining_obtain_next(self, text: str) -> str:
+    def _rewrite_remaining_obtain_next(
+        self,
+        text: str,
+    ) -> str:
         pattern = re.compile(
             r"^\s*OBTAIN\s+NEXT\s+([A-Z0-9-]+)\s+WITHIN\s+([A-Z0-9-]+)\.?\s*$",
             re.IGNORECASE | re.MULTILINE,
@@ -286,29 +347,58 @@ class ParagraphRewriter:
 
         return pattern.sub(replace, text)
 
-    def _rewrite_remaining_find_first(self, text: str) -> str:
+    def _rewrite_remaining_find_first(
+        self,
+        text: str,
+    ) -> str:
         pattern = re.compile(
             r"^\s*FIND\s+FIRST\s+WITHIN\s+([A-Z0-9-]+)\.?\s*$",
             re.IGNORECASE | re.MULTILINE,
         )
 
         return pattern.sub(
-            lambda m: self.sql.select_first_child_for_set(m.group(1).upper()),
+            lambda match: self.sql.select_first_child_for_set(match.group(1).upper()),
             text,
         )
 
-    def _rewrite_remaining_obtain_owner(self, text: str) -> str:
+    def _rewrite_remaining_obtain_owner(
+        self,
+        text: str,
+    ) -> str:
         pattern = re.compile(
             r"^\s*OBTAIN\s+OWNER\s+WITHIN\s+([A-Z0-9-]+)\.?\s*$",
             re.IGNORECASE | re.MULTILINE,
         )
 
-        return pattern.sub(
-            lambda m: self.sql.select_for_owner(m.group(1).upper()),
-            text,
-        )
+        def replace(match: re.Match) -> str:
+            set_name = match.group(1).upper()
+            indicator = self.sql.nullable_fk_indicator_for_set(set_name)
+            owner_select = self.sql.select_for_owner(set_name)
 
-    def _rewrite_status_tokens(self, text: str) -> str:
+            if not indicator:
+                return owner_select
+
+            return "\n".join(
+                [
+                    f"       IF {indicator} < 0",
+                    "          MOVE 100 TO SQLCODE",
+                    "       ELSE",
+                    *[
+                        "          " + line.strip()
+                        if line.strip()
+                        else ""
+                        for line in owner_select.splitlines()
+                    ],
+                    "       END-IF.",
+                ]
+            )
+
+        return pattern.sub(replace, text)
+
+    def _rewrite_status_tokens(
+        self,
+        text: str,
+    ) -> str:
         text = re.sub(
             r"\bDB-REC-NOT-FOUND\b",
             "SQLCODE = 100",
@@ -332,7 +422,10 @@ class ParagraphRewriter:
 
         return text
 
-    def _remove_idms_status_lines(self, text: str) -> str:
+    def _remove_idms_status_lines(
+        self,
+        text: str,
+    ) -> str:
         text = re.sub(
             r"^\s*PERFORM\s+IDMS-STATUS\.?\s*$",
             "",
@@ -351,7 +444,10 @@ class ParagraphRewriter:
 
         return text.strip()
 
-    def _clean_block(self, value: str) -> str:
+    def _clean_block(
+        self,
+        value: str,
+    ) -> str:
         value = value.strip()
 
         if value.endswith("."):

@@ -1,35 +1,139 @@
-import json
 import re
 
-from datetime import datetime
-from typing import Any
 
-from idms_modernizer.domain.canonical_models import CanonicalSchema
-from idms_modernizer.domain.db2_models import DB2Model, DB2Table, DB2Column
-from idms_modernizer.domain.schema_models import SchemaMetadata
-from idms_modernizer.services.name_normalizer import NameNormalizer
-
-
-class Phase2MetadataGenerator:
+class FieldRewriter:
     """
-    Generates Phase 2 metadata JSON from Phase 1 outputs.
+    Rewrites legacy IDMS COBOL field references in PROCEDURE DIVISION to DB2
+    host variables.
 
-    Supports:
-    - Record/table mapping.
-    - Field/column host variable mapping.
-    - Date part mapping for:
-      YEAR / MONTH / DAY
-      YR / MO / DY
-      Y / M / D
-      YY / MM / DD
-      YYYY / MM / DD
-      DY / DM / DD
-    - CALC key mapping.
-    - FK/nullability hints.
-    - Set relationship payload.
+    Handles cases where Phase 2 metadata field_map is incomplete because
+    Schema Listing conversion changed physical DB2 names.
+
+    Examples:
+    - DEPT-ID-0410 -> HV-DEPARTMENT-DEPT-ID-479MENT
+    - DEPT-NAME-0410 -> HV-DEPARTMENT-DEPT-NAME-479MENT
+    - EMP-ID-0415 -> HV-EMPLOYEE-EMP-ID-479OYEE
+    - EMP-LAST-NAME-0415 -> HV-EMPLOYEE-EMP-LASTNAME-479OYEE
+    - START-YEAR-0415 -> HV-EMPLOYEE-DA-STARTDATE-479OYEE(3:2)
+    - OFFICE-ZIP-FIRST-FIVE-0450 -> HV-OFFICE-OFFICE-ZIPFIRSTFIVE-479FICE
+
+    Safety:
+    - Does not rewrite DATA DIVISION.
+    - Does not rewrite EXEC SQL blocks.
+    - Does not rewrite comments.
+    - Does not rewrite existing HV-* or NI-* variables.
+    - Does not rewrite quoted literals.
+    - Does not rewrite standalone paragraph headers or IDMS command lines.
     """
 
-    VERSION = "1.0"
+    PROCEDURE_DIVISION = re.compile(
+        r"^\s*PROCEDURE\s+DIVISION\.",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+    EXEC_SQL_START = re.compile(
+        r"^\s*EXEC\s+SQL\b",
+        re.IGNORECASE,
+    )
+
+    EXEC_SQL_END = re.compile(
+        r"^\s*END-EXEC\.?\s*$",
+        re.IGNORECASE,
+    )
+
+    COMMENT_LINE = re.compile(
+        r"^\s*\*",
+    )
+
+    COBOL_IDENTIFIER = re.compile(
+        r"\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*\b",
+        re.IGNORECASE,
+    )
+
+    STANDALONE_DOTTED_LINE = re.compile(
+        r"^\s*[A-Z0-9-]+\.\s*$",
+        re.IGNORECASE,
+    )
+
+    RESERVED_WORDS = {
+        "ACCEPT",
+        "ADD",
+        "AFTER",
+        "ALL",
+        "AND",
+        "ARE",
+        "AREA",
+        "AT",
+        "BEFORE",
+        "BIND",
+        "BY",
+        "CALL",
+        "CLOSE",
+        "COMMIT",
+        "CONNECT",
+        "CONTINUE",
+        "DATA",
+        "DELETE",
+        "DISCONNECT",
+        "DISPLAY",
+        "DIVISION",
+        "ELSE",
+        "END",
+        "END-EXEC",
+        "END-IF",
+        "END-PERFORM",
+        "ENVIRONMENT",
+        "ERASE",
+        "EVALUATE",
+        "EXEC",
+        "EXIT",
+        "FETCH",
+        "FILE",
+        "FIND",
+        "FINISH",
+        "FROM",
+        "GET",
+        "GOBACK",
+        "IDENTIFICATION",
+        "IF",
+        "IN",
+        "INCLUDE",
+        "INTO",
+        "IS",
+        "KEEP",
+        "MODIFY",
+        "MOVE",
+        "NEXT",
+        "NOT",
+        "OBTAIN",
+        "OF",
+        "OPEN",
+        "OR",
+        "ORDER",
+        "PERFORM",
+        "PROCEDURE",
+        "READ",
+        "READY",
+        "RECORD",
+        "SECTION",
+        "SELECT",
+        "SET",
+        "SQL",
+        "SQLCA",
+        "SQLCODE",
+        "SPACES",
+        "STOP",
+        "STORE",
+        "THEN",
+        "THRU",
+        "TO",
+        "UNTIL",
+        "UPDATE",
+        "VALUE",
+        "WHEN",
+        "WHERE",
+        "WRITE",
+    }
 
     DATE_PARTS = {
         "YEAR": {
@@ -46,722 +150,868 @@ class Phase2MetadataGenerator:
         },
     }
 
-    YEAR_PARTS = {
-        "YEAR",
-        "YR",
-        "Y",
-        "YY",
-        "YYYY",
-        "DY",
-    }
-
-    MONTH_PARTS = {
-        "MONTH",
-        "MON",
-        "MO",
-        "M",
-        "MM",
-        "DM",
-    }
-
-    DAY_PARTS = {
-        "DAY",
-        "D",
-        "DD",
-    }
-
-    def generate_json(
+    def __init__(
         self,
-        canonical_schema: CanonicalSchema,
-        db2_model: DB2Model,
-        metadata: SchemaMetadata,
+        schema,
+    ) -> None:
+        self.schema = schema
+
+        self.field_map = getattr(
+            schema,
+            "field_map",
+            {},
+        ) or {}
+
+        self.date_part_map = getattr(
+            schema,
+            "date_part_map",
+            {},
+        ) or {}
+
+        self.calc_key_map = getattr(
+            schema,
+            "calc_key_map",
+            {},
+        ) or {}
+
+        self.records = getattr(
+            schema,
+            "records",
+            {},
+        ) or {}
+
+        self.record_table_map = getattr(
+            schema,
+            "record_table_map",
+            {},
+        ) or {}
+
+        self.suffix_record_map = self._build_suffix_record_map()
+        self.host_candidates = self._build_host_candidates()
+        self.rewrite_map = self._build_rewrite_map()
+
+    def rewrite(
+        self,
+        text: str,
     ) -> str:
-        payload = self.generate(
-            canonical_schema=canonical_schema,
-            db2_model=db2_model,
-            metadata=metadata,
+        if not text:
+            return text
+
+        match = self.PROCEDURE_DIVISION.search(text)
+
+        if not match:
+            return text
+
+        before_procedure = text[: match.start()]
+        procedure_text = text[match.start() :]
+
+        return before_procedure + self._rewrite_procedure_text(
+            procedure_text,
         )
 
-        return json.dumps(
-            payload,
-            indent=2,
-        )
-
-    def generate(
+    def _rewrite_procedure_text(
         self,
-        canonical_schema: CanonicalSchema,
-        db2_model: DB2Model,
-        metadata: SchemaMetadata,
-    ) -> dict[str, Any]:
-        db2_table_lookup = self.build_db2_table_lookup(
-            db2_model=db2_model,
-        )
+        text: str,
+    ) -> str:
+        result_lines = []
+        in_exec_sql = False
 
-        canonical_record_lookup = self.build_canonical_record_lookup(
-            canonical_schema=canonical_schema,
-        )
-
-        record_table_map = self.build_record_table_map(
-            canonical_schema=canonical_schema,
-            metadata=metadata,
-        )
-
-        records_payload = self.build_records_payload(
-            db2_model=db2_model,
-        )
-
-        field_map = self.build_field_map(
-            metadata=metadata,
-            canonical_schema=canonical_schema,
-            db2_table_lookup=db2_table_lookup,
-            record_table_map=record_table_map,
-        )
-
-        calc_key_map = self.build_calc_key_map(
-            canonical_schema=canonical_schema,
-            metadata=metadata,
-            record_table_map=record_table_map,
-        )
-
-        relationships_payload = self.build_relationships_payload(
-            canonical_schema=canonical_schema,
-            db2_table_lookup=db2_table_lookup,
-        )
-
-        set_ordering_map = self.build_set_ordering_map(
-            relationships=relationships_payload,
-        )
-
-        nullable_fk_map = self.build_nullable_fk_map(
-            db2_model=db2_model,
-        )
-
-        date_part_map = self.build_date_part_map(
-            metadata=metadata,
-            db2_table_lookup=db2_table_lookup,
-            record_table_map=record_table_map,
-        )
-
-        navigation_intent = self.build_navigation_intent(
-            relationships=relationships_payload,
-        )
-
-        output_semantics = self.build_output_semantics()
-
-        validation_messages = self.build_validation_messages(
-            canonical_schema=canonical_schema,
-            db2_model=db2_model,
-            metadata=metadata,
-            field_map=field_map,
-        )
-
-        return {
-            "version": self.VERSION,
-            "generated_at": datetime.utcnow().isoformat() + "Z",
-            "records": records_payload,
-            "record_table_map": record_table_map,
-            "field_map": field_map,
-            "calc_key_map": calc_key_map,
-            "relationships": relationships_payload,
-            "set_ordering_map": set_ordering_map,
-            "nullable_fk_map": nullable_fk_map,
-            "date_part_map": date_part_map,
-            "navigation_intent": navigation_intent,
-            "output_semantics": output_semantics,
-            "validation_messages": validation_messages,
-            "canonical_record_lookup_count": len(canonical_record_lookup),
-        }
-
-    def build_db2_table_lookup(
-        self,
-        db2_model: DB2Model,
-    ) -> dict[str, DB2Table]:
-        lookup: dict[str, DB2Table] = {}
-
-        for table in getattr(db2_model, "tables", []) or []:
-            table_name = NameNormalizer.normalize(
-                getattr(table, "name", ""),
-            )
-
-            if table_name:
-                lookup[table_name] = table
-
-            suffix_removed = self.remove_record_suffix(
-                table_name,
-            )
-
-            if suffix_removed:
-                lookup[suffix_removed] = table
-
-        return lookup
-
-    def build_canonical_record_lookup(
-        self,
-        canonical_schema: CanonicalSchema,
-    ) -> dict[str, Any]:
-        lookup: dict[str, Any] = {}
-
-        for record in getattr(canonical_schema, "records", []) or []:
-            record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            if record_name:
-                lookup[record_name] = record
-
-        return lookup
-
-    def build_record_table_map(
-        self,
-        canonical_schema: CanonicalSchema,
-        metadata: SchemaMetadata,
-    ) -> dict[str, str]:
-        record_table_map: dict[str, str] = {}
-
-        for record in getattr(canonical_schema, "records", []) or []:
-            canonical_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            if canonical_name:
-                record_table_map[canonical_name] = canonical_name
-
-        for record in getattr(metadata, "records", []) or []:
-            metadata_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            if metadata_name and metadata_name not in record_table_map:
-                record_table_map[metadata_name] = metadata_name
-
-        return record_table_map
-
-    def build_records_payload(
-        self,
-        db2_model: DB2Model,
-    ) -> list[dict[str, Any]]:
-        records_payload: list[dict[str, Any]] = []
-
-        for table in getattr(db2_model, "tables", []) or []:
-            fields_payload: list[dict[str, Any]] = []
-
-            for column in getattr(table, "columns", []) or []:
-                datatype, length, scale = self.parse_db2_datatype(
-                    getattr(column, "datatype", ""),
-                )
-
-                fields_payload.append(
-                    {
-                        "name": getattr(column, "name", ""),
-                        "column": getattr(column, "name", ""),
-                        "datatype": datatype,
-                        "length": length,
-                        "scale": scale,
-                        "nullable": getattr(column, "nullable", True),
-                        "primary_key": getattr(column, "primary_key", False),
-                    }
-                )
-
-            records_payload.append(
-                {
-                    "name": getattr(table, "name", ""),
-                    "table": getattr(table, "name", ""),
-                    "primary_key": getattr(table, "primary_key", None),
-                    "fields": fields_payload,
-                }
-            )
-
-        return records_payload
-
-    def build_field_map(
-        self,
-        metadata: SchemaMetadata,
-        canonical_schema: CanonicalSchema,
-        db2_table_lookup: dict[str, DB2Table],
-        record_table_map: dict[str, str],
-    ) -> dict[str, dict[str, Any]]:
-        field_map: dict[str, dict[str, Any]] = {}
-
-        for record in getattr(metadata, "records", []) or []:
-            idms_record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            if not idms_record_name:
+        for line in text.splitlines():
+            if self.EXEC_SQL_START.match(line):
+                in_exec_sql = True
+                result_lines.append(line)
                 continue
 
-            table_name = record_table_map.get(
-                idms_record_name,
-                idms_record_name,
-            )
+            if in_exec_sql:
+                result_lines.append(line)
 
-            table = db2_table_lookup.get(
-                table_name,
-            )
+                if self.EXEC_SQL_END.match(line):
+                    in_exec_sql = False
 
-            if table is None:
                 continue
 
-            db2_columns = {
-                NameNormalizer.normalize(getattr(column, "name", "")): column
-                for column in getattr(table, "columns", []) or []
-            }
-
-            source_fields = (
-                getattr(record, "mapping_fields", None)
-                or getattr(record, "fields", [])
-                or []
-            )
-
-            for field in source_fields:
-                legacy_field_name = NameNormalizer.normalize(
-                    getattr(field, "name", ""),
-                )
-
-                if not legacy_field_name:
-                    continue
-
-                physical_column_name = self.find_matching_column(
-                    legacy_field_name=legacy_field_name,
-                    db2_columns=db2_columns,
-                )
-
-                if not physical_column_name:
-                    continue
-
-                host = self.host_variable(
-                    record_name=idms_record_name,
-                    column_name=physical_column_name,
-                    remove_suffix=True,
-                )
-
-                field_map[legacy_field_name] = {
-                    "host": host,
-                    "record": idms_record_name,
-                    "table": table.name,
-                    "column": physical_column_name,
-                    "legacy_field": legacy_field_name,
-                }
-
-                suffix_removed_legacy = self.remove_record_suffix(
-                    legacy_field_name,
-                )
-
-                if suffix_removed_legacy and suffix_removed_legacy not in field_map:
-                    field_map[suffix_removed_legacy] = {
-                        "host": host,
-                        "record": idms_record_name,
-                        "table": table.name,
-                        "column": physical_column_name,
-                        "legacy_field": legacy_field_name,
-                    }
-
-        return field_map
-
-    def build_calc_key_map(
-        self,
-        canonical_schema: CanonicalSchema,
-        metadata: SchemaMetadata,
-        record_table_map: dict[str, str],
-    ) -> dict[str, dict[str, Any]]:
-        calc_key_map: dict[str, dict[str, Any]] = {}
-
-        for record in getattr(metadata, "records", []) or []:
-            primary_key = getattr(record, "primary_key", None)
-
-            if not primary_key:
+            if self.COMMENT_LINE.match(line):
+                result_lines.append(line)
                 continue
 
-            idms_record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
+            result_lines.append(
+                self._rewrite_line(line),
             )
 
-            table_name = record_table_map.get(
-                idms_record_name,
-                idms_record_name,
-            )
+        return "\n".join(result_lines)
 
-            normalized_primary_key = NameNormalizer.normalize(
-                primary_key,
-            )
-
-            calc_key_map[idms_record_name] = {
-                "record": idms_record_name,
-                "table": table_name,
-                "key": normalized_primary_key,
-                "primary_key": normalized_primary_key,
-                "column": normalized_primary_key,
-                "host": self.host_variable(
-                    record_name=idms_record_name,
-                    column_name=normalized_primary_key,
-                    remove_suffix=True,
-                ),
-            }
-
-        for record in getattr(canonical_schema, "records", []) or []:
-            primary_key = getattr(record, "primary_key", None)
-
-            if not primary_key:
-                continue
-
-            record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            normalized_primary_key = NameNormalizer.normalize(
-                primary_key,
-            )
-
-            if record_name not in calc_key_map:
-                calc_key_map[record_name] = {
-                    "record": record_name,
-                    "table": record_name,
-                    "key": normalized_primary_key,
-                    "primary_key": normalized_primary_key,
-                    "column": normalized_primary_key,
-                    "host": self.host_variable(
-                        record_name=record_name,
-                        column_name=normalized_primary_key,
-                        remove_suffix=True,
-                    ),
-                }
-
-        return calc_key_map
-
-    def build_relationships_payload(
+    def _rewrite_line(
         self,
-        canonical_schema: CanonicalSchema,
-        db2_table_lookup: dict[str, DB2Table],
-    ) -> list[dict[str, Any]]:
-        relationships_payload: list[dict[str, Any]] = []
+        line: str,
+    ) -> str:
+        if not line.strip():
+            return line
 
-        for relationship in getattr(canonical_schema, "relationships", []) or []:
-            parent_record = NameNormalizer.normalize(
-                getattr(relationship, "parent_record", ""),
-            )
+        if self.STANDALONE_DOTTED_LINE.match(line):
+            return line
 
-            child_record = NameNormalizer.normalize(
-                getattr(relationship, "child_record", ""),
-            )
+        protected_ranges = self._protected_ranges(line)
 
-            set_name = NameNormalizer.normalize(
-                getattr(relationship, "set_name", ""),
-            )
+        def replace_token(match):
+            token = match.group(0)
 
-            parent_table = db2_table_lookup.get(
-                parent_record,
-            )
+            if self._is_protected(
+                start=match.start(),
+                end=match.end(),
+                ranges=protected_ranges,
+            ):
+                return token
 
-            child_table = db2_table_lookup.get(
-                child_record,
-            )
+            replacement = self._replacement_for_token(token)
 
-            parent_key = (
-                getattr(parent_table, "primary_key", None)
-                if parent_table is not None
-                else None
-            )
+            if not replacement:
+                return token
 
-            child_fk = None
-            order_by: list[str] = []
+            return replacement
 
-            if child_table is not None:
-                for foreign_key in getattr(child_table, "foreign_keys", []) or []:
-                    if (
-                        parent_table is not None
-                        and NameNormalizer.normalize(getattr(foreign_key, "reference_table", ""))
-                        == NameNormalizer.normalize(getattr(parent_table, "name", ""))
-                    ):
-                        child_fk = getattr(foreign_key, "column_name", None)
-                        order_by = [child_fk] if child_fk else []
-                        break
-
-            relationships_payload.append(
-                {
-                    "set_name": set_name,
-                    "parent_record": parent_record,
-                    "child_record": child_record,
-                    "parent_key": parent_key,
-                    "child_fk": child_fk,
-                    "cardinality": getattr(relationship, "cardinality", "1:N") or "1:N",
-                    "order_by": order_by,
-                }
-            )
-
-        return relationships_payload
-
-    def build_set_ordering_map(
-        self,
-        relationships: list[dict[str, Any]],
-    ) -> dict[str, dict[str, Any]]:
-        set_ordering_map: dict[str, dict[str, Any]] = {}
-
-        for relationship in relationships:
-            set_name = relationship.get(
-                "set_name",
-            )
-
-            if not set_name:
-                continue
-
-            set_ordering_map[set_name] = {
-                "order_by": relationship.get("order_by") or [],
-            }
-
-        return set_ordering_map
-
-    def build_nullable_fk_map(
-        self,
-        db2_model: DB2Model,
-    ) -> dict[str, bool]:
-        nullable_fk_map: dict[str, bool] = {}
-
-        for table in getattr(db2_model, "tables", []) or []:
-            column_lookup = {
-                getattr(column, "name", ""): column
-                for column in getattr(table, "columns", []) or []
-            }
-
-            for foreign_key in getattr(table, "foreign_keys", []) or []:
-                fk_column_name = getattr(foreign_key, "column_name", "")
-                fk_column = column_lookup.get(fk_column_name)
-
-                nullable_fk_map[f"{table.name}.{fk_column_name}"] = (
-                    getattr(fk_column, "nullable", True)
-                    if fk_column is not None
-                    else True
-                )
-
-        return nullable_fk_map
-
-    def build_date_part_map(
-        self,
-        metadata: SchemaMetadata,
-        db2_table_lookup: dict[str, DB2Table],
-        record_table_map: dict[str, str],
-    ) -> dict[str, dict[str, Any]]:
-        date_part_map: dict[str, dict[str, Any]] = {}
-
-        for record in getattr(metadata, "records", []) or []:
-            idms_record_name = NameNormalizer.normalize(
-                getattr(record, "name", ""),
-            )
-
-            if not idms_record_name:
-                continue
-
-            table_name = record_table_map.get(
-                idms_record_name,
-                idms_record_name,
-            )
-
-            table = db2_table_lookup.get(
-                table_name,
-            )
-
-            if table is None:
-                continue
-
-            date_columns = {
-                NameNormalizer.normalize(getattr(column, "name", "")): column
-                for column in getattr(table, "columns", []) or []
-                if str(getattr(column, "datatype", "")).upper() == "DATE"
-            }
-
-            source_fields = (
-                getattr(record, "mapping_fields", None)
-                or getattr(record, "fields", [])
-                or []
-            )
-
-            for field in source_fields:
-                legacy_field_name = NameNormalizer.normalize(
-                    getattr(field, "name", ""),
-                )
-
-                parsed = self.parse_date_part(
-                    field_name=legacy_field_name,
-                )
-
-                if parsed is None:
-                    continue
-
-                part = parsed["part"]
-                candidate_columns = parsed["candidate_columns"]
-
-                physical_date_column = self.find_first_existing_column(
-                    candidates=candidate_columns,
-                    columns=date_columns,
-                )
-
-                if physical_date_column is None:
-                    continue
-
-                date_part_meta = self.DATE_PARTS[part]
-
-                date_part_map[legacy_field_name] = {
-                    "host": self.host_variable(
-                        record_name=idms_record_name,
-                        column_name=physical_date_column,
-                        remove_suffix=True,
-                    ),
-                    "record": idms_record_name,
-                    "table": table.name,
-                    "column": physical_date_column,
-                    "date_part": part,
-                    "substring_start": date_part_meta["substring_start"],
-                    "substring_length": date_part_meta["substring_length"],
-                }
-
-        return date_part_map
-
-    def build_navigation_intent(
-        self,
-        relationships: list[dict[str, Any]],
-    ) -> dict[str, dict[str, Any]]:
-        navigation_intent: dict[str, dict[str, Any]] = {}
-
-        for relationship in relationships:
-            set_name = relationship.get(
-                "set_name",
-            )
-
-            if not set_name:
-                continue
-
-            navigation_intent[set_name] = {
-                "access_pattern": "SET_NAVIGATION",
-                "parent_record": relationship.get("parent_record"),
-                "child_record": relationship.get("child_record"),
-                "parent_key": relationship.get("parent_key"),
-                "child_fk": relationship.get("child_fk"),
-                "order_by": relationship.get("order_by") or [],
-            }
-
-        return navigation_intent
-
-    def build_output_semantics(
-        self,
-    ) -> dict[str, Any]:
-        return {
-            "generated_by": "idms-db2-modernizer-phase1",
-            "usage": "IDMS retrieval COBOL to DB2 embedded SQL conversion",
-            "physical_types_source": "DB2_DDL",
-            "logical_mapping_source": "PHASE1_CANONICAL_METADATA",
-        }
-
-    def build_validation_messages(
-        self,
-        canonical_schema: CanonicalSchema,
-        db2_model: DB2Model,
-        metadata: SchemaMetadata,
-        field_map: dict[str, dict[str, Any]],
-    ) -> list[str]:
-        messages: list[str] = []
-
-        if not getattr(canonical_schema, "records", []):
-            messages.append("No canonical records found.")
-
-        if not getattr(db2_model, "tables", []):
-            messages.append("No DB2 tables found.")
-
-        if not getattr(metadata, "records", []):
-            messages.append("No IDMS metadata records found.")
-
-        if not field_map:
-            messages.append("No field map entries generated.")
-
-        for table in getattr(db2_model, "tables", []) or []:
-            primary_key = getattr(table, "primary_key", None)
-
-            if not primary_key:
-                continue
-
-            column_names = {
-                NameNormalizer.normalize(getattr(column, "name", ""))
-                for column in getattr(table, "columns", []) or []
-            }
-
-            if NameNormalizer.normalize(primary_key) not in column_names:
-                messages.append(
-                    f"Table {table.name} primary key {primary_key} is not present as a DB2 column."
-                )
-
-        return messages
-
-    def find_matching_column(
-        self,
-        legacy_field_name: str,
-        db2_columns: dict[str, DB2Column],
-    ) -> str | None:
-        normalized = NameNormalizer.normalize(
-            legacy_field_name,
+        return self.COBOL_IDENTIFIER.sub(
+            replace_token,
+            line,
         )
 
-        if normalized in db2_columns:
-            return normalized
+    def _replacement_for_token(
+        self,
+        token: str,
+    ):
+        normalized = self._normalize_cobol_name(token)
 
-        suffix_removed = self.remove_record_suffix(
-            normalized,
+        if not normalized:
+            return None
+
+        if normalized in self.RESERVED_WORDS:
+            return None
+
+        if normalized.startswith("HV-"):
+            return None
+
+        if normalized.startswith("NI-"):
+            return None
+
+        direct = self.rewrite_map.get(normalized)
+
+        if direct:
+            return direct
+
+        underscore_key = normalized.replace("-", "_")
+
+        direct = self.rewrite_map.get(underscore_key)
+
+        if direct:
+            return direct
+
+        suffix_removed = self._remove_numeric_suffix(normalized)
+
+        if suffix_removed and suffix_removed != normalized:
+            direct = self.rewrite_map.get(suffix_removed)
+
+            if direct:
+                return direct
+
+            direct = self.rewrite_map.get(
+                suffix_removed.replace("-", "_"),
+            )
+
+            if direct:
+                return direct
+
+            compact = self._compact_name(suffix_removed)
+
+            direct = self.rewrite_map.get(compact)
+
+            if direct:
+                return direct
+
+        inferred = self._infer_replacement_from_schema(
+            token=normalized,
         )
 
-        for column_name in db2_columns:
-            if self.remove_record_suffix(column_name) == suffix_removed:
-                return column_name
+        if inferred:
+            self._add_rewrite_aliases(
+                rewrite_map=self.rewrite_map,
+                key=normalized,
+                value=inferred,
+                overwrite=True,
+            )
+
+            return inferred
 
         return None
 
-    def parse_date_part(
+    def _build_rewrite_map(
         self,
-        field_name: str,
-    ) -> dict[str, Any] | None:
-        tokens = self.split_tokens(
-            value=field_name,
+    ):
+        rewrite_map = {}
+
+        self._merge_field_map(
+            rewrite_map,
         )
+
+        self._merge_date_part_map(
+            rewrite_map,
+        )
+
+        self._merge_calc_key_map(
+            rewrite_map,
+        )
+
+        self._merge_schema_fallback_map(
+            rewrite_map,
+        )
+
+        return rewrite_map
+
+    def _merge_field_map(
+        self,
+        rewrite_map,
+    ) -> None:
+        for legacy_field, metadata in self.field_map.items():
+            if not isinstance(metadata, dict):
+                continue
+
+            host = metadata.get("host")
+
+            if not host:
+                continue
+
+            value = self._normalize_host_name(
+                str(host),
+            )
+
+            if not value:
+                continue
+
+            keys = [
+                str(legacy_field),
+                metadata.get("legacy_field"),
+                metadata.get("column"),
+            ]
+
+            for key_value in keys:
+                if not key_value:
+                    continue
+
+                self._add_rewrite_aliases(
+                    rewrite_map=rewrite_map,
+                    key=str(key_value),
+                    value=value,
+                    overwrite=False,
+                )
+
+    def _merge_date_part_map(
+        self,
+        rewrite_map,
+    ) -> None:
+        for legacy_field, metadata in self.date_part_map.items():
+            if not isinstance(metadata, dict):
+                continue
+
+            host = metadata.get("host")
+
+            if not host:
+                continue
+
+            host_name = self._normalize_host_name(
+                str(host),
+            )
+
+            if not host_name:
+                continue
+
+            substring_start = metadata.get("substring_start")
+            substring_length = metadata.get("substring_length")
+
+            if substring_start and substring_length:
+                value = f"{host_name}({substring_start}:{substring_length})"
+            else:
+                value = host_name
+
+            self._add_rewrite_aliases(
+                rewrite_map=rewrite_map,
+                key=str(legacy_field),
+                value=value,
+                overwrite=True,
+            )
+
+    def _merge_calc_key_map(
+        self,
+        rewrite_map,
+    ) -> None:
+        for record_name, metadata in self.calc_key_map.items():
+            if not isinstance(metadata, dict):
+                continue
+
+            host = metadata.get("host")
+            key = (
+                metadata.get("key")
+                or metadata.get("primary_key")
+                or metadata.get("column")
+            )
+
+            if not key:
+                continue
+
+            value = None
+
+            if host:
+                value = self._normalize_host_name(
+                    str(host),
+                )
+
+            if value:
+                self._add_rewrite_aliases(
+                    rewrite_map=rewrite_map,
+                    key=str(key),
+                    value=value,
+                    overwrite=True,
+                )
+
+            suffix = self._extract_numeric_suffix(str(key))
+
+            if suffix:
+                record = self._normalize_db2_name(str(record_name))
+
+                if record:
+                    self.suffix_record_map[suffix] = record
+
+    def _merge_schema_fallback_map(
+        self,
+        rewrite_map,
+    ) -> None:
+        for candidate in self.host_candidates:
+            record_name = candidate["record"]
+            column_name = candidate["column"]
+            host = candidate["host"]
+
+            column_base = self._remove_generated_suffix(
+                self._normalize_cobol_name(column_name),
+            )
+
+            if not column_base:
+                continue
+
+            self._add_rewrite_aliases(
+                rewrite_map=rewrite_map,
+                key=column_base,
+                value=host,
+                overwrite=False,
+            )
+
+            compact_base = self._compact_name(column_base)
+
+            if compact_base:
+                rewrite_map.setdefault(
+                    compact_base,
+                    host,
+                )
+
+            record_suffix = self._suffix_for_record(record_name)
+
+            if record_suffix:
+                self._add_rewrite_aliases(
+                    rewrite_map=rewrite_map,
+                    key=f"{column_base}-{record_suffix}",
+                    value=host,
+                    overwrite=True,
+                )
+
+    def _infer_replacement_from_schema(
+        self,
+        token: str,
+    ):
+        parsed = self._parse_legacy_token(
+            token,
+        )
+
+        base = parsed["base"]
+        suffix = parsed["suffix"]
+
+        if not base:
+            return None
+
+        date_replacement = self._infer_date_part_replacement(
+            base=base,
+            suffix=suffix,
+        )
+
+        if date_replacement:
+            return date_replacement
+
+        candidates = self._candidate_hosts_for_base(
+            base=base,
+            suffix=suffix,
+        )
+
+        if not candidates:
+            return None
+
+        if len(candidates) == 1:
+            selected = candidates[0]
+        else:
+            selected = self._choose_best_candidate(
+                base=base,
+                suffix=suffix,
+                candidates=candidates,
+            )
+
+        if not selected:
+            return None
+
+        if suffix:
+            self.suffix_record_map[suffix] = selected["record"]
+
+        return selected["host"]
+
+    def _infer_date_part_replacement(
+        self,
+        base: str,
+        suffix,
+    ):
+        tokens = [
+            token
+            for token in base.replace("_", "-").split("-")
+            if token
+        ]
 
         if len(tokens) < 2:
             return None
 
+        part = None
+        part_index = None
+
         for index, token in enumerate(tokens):
-            part = self.date_part_type(
+            resolved_part = self._date_part_type(
                 token=token,
                 tokens=tokens,
             )
 
-            if part is None:
+            if resolved_part:
+                part = resolved_part
+                part_index = index
+                break
+
+        if not part or part_index is None:
+            return None
+
+        base_tokens = tokens[:part_index] + tokens[part_index + 1 :]
+        date_tokens = tokens.copy()
+        date_tokens[part_index] = "DATE"
+
+        joined_base = "-".join(base_tokens)
+        compact_base = self._compact_name(joined_base)
+
+        candidate_bases = self._unique_values(
+            [
+                "-".join(date_tokens),
+                joined_base,
+                "DA-" + compact_base + "DATE",
+                "DA-" + joined_base + "DATE",
+                compact_base + "DATE",
+            ]
+        )
+
+        candidates = []
+
+        for candidate_base in candidate_bases:
+            candidates.extend(
+                self._candidate_hosts_for_base(
+                    base=candidate_base,
+                    suffix=suffix,
+                    date_only=True,
+                )
+            )
+
+        if not candidates:
+            return None
+
+        if len(candidates) == 1:
+            selected = candidates[0]
+        else:
+            selected = self._choose_best_candidate(
+                base=joined_base,
+                suffix=suffix,
+                candidates=candidates,
+            )
+
+        if not selected:
+            return None
+
+        if suffix:
+            self.suffix_record_map[suffix] = selected["record"]
+
+        meta = self.DATE_PARTS[part]
+
+        return (
+            f"{selected['host']}("
+            f"{meta['substring_start']}:{meta['substring_length']})"
+        )
+
+    def _candidate_hosts_for_base(
+        self,
+        base: str,
+        suffix,
+        date_only: bool = False,
+    ):
+        base_normalized = self._normalize_cobol_name(base)
+        base_compact = self._compact_name(base_normalized)
+
+        result = []
+        suffix_record = self.suffix_record_map.get(suffix or "")
+
+        for candidate in self.host_candidates:
+            record_name = candidate["record"]
+            column_base = candidate["base"]
+            column_compact = candidate["compact"]
+            datatype = candidate.get("datatype", "")
+
+            if date_only and datatype != "DATE":
                 continue
 
-            base_tokens = tokens[:index] + tokens[index + 1 :]
-            date_tokens = tokens.copy()
-            date_tokens[index] = "DATE"
+            if suffix_record and record_name != suffix_record:
+                continue
 
-            base_name = " ".join(base_tokens)
-            date_name = " ".join(date_tokens)
+            if column_base == base_normalized:
+                result.append(candidate)
+                continue
 
-            return {
-                "part": part,
-                "candidate_columns": self.unique_values(
-                    [
-                        date_name,
-                        base_name,
-                    ]
-                ),
-            }
+            if column_compact == base_compact:
+                result.append(candidate)
+                continue
+
+            if base_compact and column_compact.endswith(base_compact):
+                result.append(candidate)
+                continue
+
+            if base_compact and base_compact in column_compact:
+                result.append(candidate)
+                continue
+
+        return self._dedupe_candidates(result)
+
+    def _choose_best_candidate(
+        self,
+        base: str,
+        suffix,
+        candidates,
+    ):
+        if not candidates:
+            return None
+
+        suffix_record = self.suffix_record_map.get(suffix or "")
+
+        if suffix_record:
+            filtered = [
+                candidate
+                for candidate in candidates
+                if candidate["record"] == suffix_record
+            ]
+
+            if len(filtered) == 1:
+                return filtered[0]
+
+            if filtered:
+                candidates = filtered
+
+        base_tokens = [
+            token
+            for token in base.replace("_", "-").split("-")
+            if token
+        ]
+
+        first_token = base_tokens[0] if base_tokens else ""
+        base_compact = self._compact_name(base)
+
+        scored = []
+
+        for candidate in candidates:
+            score = 0
+
+            record_name = candidate["record"]
+            record_prefix = candidate.get("record_prefix", "")
+            column_base = candidate["base"]
+            column_compact = candidate["compact"]
+
+            if base_compact == column_compact:
+                score += 100
+
+            if first_token and first_token == record_prefix:
+                score += 40
+
+            if first_token and column_base.startswith(first_token + "-"):
+                score += 20
+
+            if first_token and record_name.startswith(first_token):
+                score += 10
+
+            if base_compact and column_compact.endswith(base_compact):
+                score += 5
+
+            scored.append((score, candidate))
+
+        scored.sort(
+            key=lambda item: item[0],
+            reverse=True,
+        )
+
+        if not scored:
+            return None
+
+        top_score = scored[0][0]
+
+        top = [
+            candidate
+            for score, candidate in scored
+            if score == top_score
+        ]
+
+        if len(top) == 1:
+            return top[0]
 
         return None
 
-    def date_part_type(
+    def _build_suffix_record_map(
+        self,
+    ):
+        result = {}
+
+        for key, metadata in self.field_map.items():
+            if not isinstance(metadata, dict):
+                continue
+
+            suffix = self._extract_numeric_suffix(str(key))
+
+            if not suffix:
+                legacy = metadata.get("legacy_field")
+
+                if legacy:
+                    suffix = self._extract_numeric_suffix(str(legacy))
+
+            record = metadata.get("record") or metadata.get("table")
+
+            if suffix and record:
+                result[suffix] = self._normalize_db2_name(str(record))
+
+        for key, metadata in self.date_part_map.items():
+            if not isinstance(metadata, dict):
+                continue
+
+            suffix = self._extract_numeric_suffix(str(key))
+            record = metadata.get("record") or metadata.get("table")
+
+            if suffix and record:
+                result[suffix] = self._normalize_db2_name(str(record))
+
+        for record_name, metadata in self.calc_key_map.items():
+            if not isinstance(metadata, dict):
+                continue
+
+            key = (
+                metadata.get("key")
+                or metadata.get("primary_key")
+                or metadata.get("column")
+            )
+
+            suffix = self._extract_numeric_suffix(str(key or ""))
+
+            if suffix:
+                result[suffix] = self._normalize_db2_name(str(record_name))
+
+        return result
+
+    def _build_host_candidates(
+        self,
+    ):
+        candidates = []
+
+        for logical_record_name, physical_record_name in self._logical_physical_records():
+            record = self.records.get(physical_record_name)
+
+            if not record:
+                continue
+
+            record_prefix = self._dominant_record_prefix(record)
+
+            for column_name, column in getattr(record, "fields", {}).items():
+                column_text = self._normalize_cobol_name(str(column_name))
+                base = self._remove_generated_suffix(column_text)
+
+                host = self._host_variable(
+                    record_name=logical_record_name,
+                    column_name=str(column_name),
+                )
+
+                candidates.append(
+                    {
+                        "record": self._normalize_db2_name(logical_record_name),
+                        "physical_record": self._normalize_db2_name(physical_record_name),
+                        "column": column_text,
+                        "base": base,
+                        "compact": self._compact_name(base),
+                        "host": host,
+                        "datatype": str(getattr(column, "datatype", "") or "").upper(),
+                        "record_prefix": record_prefix,
+                    }
+                )
+
+        return self._dedupe_candidates(candidates)
+
+    def _logical_physical_records(
+        self,
+    ):
+        pairs = []
+
+        for logical_record_name, physical_record_name in self.record_table_map.items():
+            logical = self._normalize_db2_name(str(logical_record_name))
+            physical = self._normalize_db2_name(str(physical_record_name))
+
+            if physical in self.records:
+                pairs.append((logical, physical))
+
+        for record_name in self.records.keys():
+            normalized_record = self._normalize_db2_name(str(record_name))
+            pairs.append((normalized_record, normalized_record))
+
+        seen = set()
+        result = []
+
+        for pair in pairs:
+            if pair in seen:
+                continue
+
+            seen.add(pair)
+            result.append(pair)
+
+        return result
+
+    def _dominant_record_prefix(
+        self,
+        record,
+    ) -> str:
+        counts = {}
+
+        for column_name in getattr(record, "fields", {}).keys():
+            base = self._remove_generated_suffix(
+                self._normalize_cobol_name(str(column_name)),
+            )
+
+            tokens = [
+                token
+                for token in base.split("-")
+                if token
+            ]
+
+            if not tokens:
+                continue
+
+            first = tokens[0]
+            counts[first] = counts.get(first, 0) + 1
+
+        if not counts:
+            return ""
+
+        return sorted(
+            counts.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )[0][0]
+
+    def _add_rewrite_aliases(
+        self,
+        rewrite_map,
+        key: str,
+        value: str,
+        overwrite: bool,
+    ) -> None:
+        normalized = self._normalize_cobol_name(key)
+        underscore = normalized.replace("-", "_")
+        suffix_removed = self._remove_numeric_suffix(normalized)
+        generated_removed = self._remove_generated_suffix(normalized)
+        underscore_suffix_removed = suffix_removed.replace("-", "_")
+        compact = self._compact_name(suffix_removed)
+
+        aliases = [
+            normalized,
+            underscore,
+            suffix_removed,
+            generated_removed,
+            underscore_suffix_removed,
+            compact,
+        ]
+
+        for alias in aliases:
+            if not alias:
+                continue
+
+            if overwrite:
+                rewrite_map[alias] = value
+            else:
+                rewrite_map.setdefault(alias, value)
+
+    def _protected_ranges(
+        self,
+        line: str,
+    ):
+        ranges = []
+
+        for match in re.finditer(
+            r"\bHV-[A-Z0-9-]+(?:$[0-9]+:[0-9]+$)?",
+            line,
+            flags=re.IGNORECASE,
+        ):
+            ranges.append((match.start(), match.end()))
+
+        for match in re.finditer(
+            r"\bNI-[A-Z0-9-]+\b",
+            line,
+            flags=re.IGNORECASE,
+        ):
+            ranges.append((match.start(), match.end()))
+
+        for match in re.finditer(r"'[^']*'", line):
+            ranges.append((match.start(), match.end()))
+
+        for match in re.finditer(r'"[^"]*"', line):
+            ranges.append((match.start(), match.end()))
+
+        return ranges
+
+    def _is_protected(
+        self,
+        start: int,
+        end: int,
+        ranges,
+    ) -> bool:
+        for range_start, range_end in ranges:
+            if start >= range_start and end <= range_end:
+                return True
+
+        return False
+
+    def _parse_legacy_token(
         self,
         token: str,
-        tokens: list[str],
-    ) -> str | None:
-        token = token.upper()
+    ):
+        normalized = self._normalize_cobol_name(token)
+        suffix = self._extract_numeric_suffix(normalized)
+        base = self._remove_numeric_suffix(normalized)
 
-        has_dy_dm_dd = (
-            "DY" in tokens
-            and "DM" in tokens
-            and "DD" in tokens
-        )
+        return {
+            "normalized": normalized,
+            "base": base,
+            "suffix": suffix,
+        }
+
+    def _date_part_type(
+        self,
+        token: str,
+        tokens,
+    ):
+        token = str(token or "").upper()
+        has_dy_dm_dd = "DY" in tokens and "DM" in tokens and "DD" in tokens
 
         if token in {"YEAR", "YR", "Y", "YY", "YYYY"}:
             return "YEAR"
@@ -780,157 +1030,124 @@ class Phase2MetadataGenerator:
 
         return None
 
-    def find_first_existing_column(
+    def _suffix_for_record(
         self,
-        candidates: list[str],
-        columns: dict[str, DB2Column],
-    ) -> str | None:
-        for candidate in candidates:
-            normalized_candidate = NameNormalizer.normalize(
-                candidate,
-            )
+        record_name: str,
+    ):
+        normalized_record = self._normalize_db2_name(record_name)
 
-            if normalized_candidate in columns:
-                return normalized_candidate
-
-            suffix_removed_candidate = self.remove_record_suffix(
-                normalized_candidate,
-            )
-
-            for column_name in columns:
-                if self.remove_record_suffix(column_name) == suffix_removed_candidate:
-                    return column_name
+        for suffix, mapped_record in self.suffix_record_map.items():
+            if mapped_record == normalized_record:
+                return suffix
 
         return None
 
-    def host_variable(
+    def _host_variable(
         self,
         record_name: str,
         column_name: str,
-        remove_suffix: bool = True,
     ) -> str:
-        record = NameNormalizer.normalize(
-            record_name,
-        ).replace(
-            " ",
-            "-",
+        return (
+            "HV-"
+            + self._normalize_cobol_name(record_name)
+            + "-"
+            + self._normalize_cobol_name(column_name)
         )
 
-        column = NameNormalizer.normalize(
-            column_name,
-        )
-
-        if remove_suffix:
-            column = self.remove_record_suffix(
-                column,
-            )
-
-        column = column.replace(
-            " ",
-            "-",
-        )
-
-        return f"HV-{record}-{column}"
-
-    def parse_db2_datatype(
+    def _normalize_cobol_name(
         self,
-        datatype: str,
-    ) -> tuple[str, int | None, int | None]:
-        value = (
-            datatype
-            or "VARCHAR(255)"
-        ).strip().upper()
-
-        decimal_match = re.match(
-            r"^(DECIMAL|NUMERIC)$(\d+),\s*(\d+)$$",
-            value,
-        )
-
-        if decimal_match:
-            return (
-                "DECIMAL",
-                int(decimal_match.group(2)),
-                int(decimal_match.group(3)),
-            )
-
-        varchar_match = re.match(
-            r"^(VARCHAR|CHAR)$(\d+)$$",
-            value,
-        )
-
-        if varchar_match:
-            return (
-                varchar_match.group(1),
-                int(varchar_match.group(2)),
-                None,
-            )
-
-        if value in {"INTEGER", "INT"}:
-            return "INTEGER", 9, 0
-
-        if value == "BIGINT":
-            return "BIGINT", 18, 0
-
-        if value == "SMALLINT":
-            return "INTEGER", 9, 0
-
-        if value == "DATE":
-            return "DATE", None, None
-
-        if value == "TIMESTAMP":
-            return "TIMESTAMP", None, None
-
-        return value, None, None
-
-    def remove_record_suffix(
-        self,
-        field_name: str,
+        value: str,
     ) -> str:
-        normalized = NameNormalizer.normalize(
-            field_name,
-        )
+        normalized = str(value or "").strip().upper()
 
-        parts = normalized.split()
+        if not normalized:
+            return ""
 
-        if (
-            len(parts) > 1
-            and parts[-1].isdigit()
-            and len(parts[-1]) == 4
-        ):
-            return " ".join(
-                parts[:-1],
-            )
+        normalized = normalized.replace("_", "-")
+        normalized = normalized.replace(" ", "-")
+        normalized = re.sub(r"[^A-Z0-9-]", "-", normalized)
+        normalized = re.sub(r"-+", "-", normalized)
+
+        return normalized.strip("-")
+
+    def _normalize_db2_name(
+        self,
+        value: str,
+    ) -> str:
+        normalized = str(value or "").strip().upper()
+
+        if not normalized:
+            return ""
+
+        normalized = normalized.replace("-", "_")
+        normalized = normalized.replace(" ", "_")
+        normalized = re.sub(r"[^A-Z0-9_]", "_", normalized)
+        normalized = re.sub(r"_+", "_", normalized)
+
+        return normalized.strip("_")
+
+    def _normalize_host_name(
+        self,
+        value: str,
+    ) -> str:
+        normalized = str(value or "").strip().upper()
+
+        if not normalized:
+            return ""
+
+        normalized = normalized.lstrip(":").strip()
+        normalized = normalized.replace("_", "-")
+        normalized = normalized.replace(" ", "-")
+        normalized = re.sub(r"[^A-Z0-9\-():]", "-", normalized)
+        normalized = re.sub(r"-+", "-", normalized)
+
+        return normalized.strip("-")
+
+    def _remove_numeric_suffix(
+        self,
+        value: str,
+    ) -> str:
+        normalized = self._normalize_cobol_name(value)
+
+        return re.sub(r"-\d{4}$", "", normalized)
+
+    def _remove_generated_suffix(
+        self,
+        value: str,
+    ) -> str:
+        normalized = self._normalize_cobol_name(value)
+        normalized = re.sub(r"-479[A-Z0-9]+$", "", normalized)
+        normalized = re.sub(r"-\d{4}$", "", normalized)
 
         return normalized
 
-    def split_tokens(
+    def _extract_numeric_suffix(
         self,
         value: str,
-    ) -> list[str]:
-        normalized = NameNormalizer.normalize(
-            value,
-        )
+    ):
+        normalized = self._normalize_cobol_name(value)
+        match = re.search(r"-(\d{4})$", normalized)
 
-        return [
-            token.upper()
-            for token in re.split(
-                r"[\s_-]+",
-                normalized,
-            )
-            if token
-        ]
+        if not match:
+            return None
 
-    def unique_values(
+        return match.group(1)
+
+    def _compact_name(
         self,
-        values: list[str],
-    ) -> list[str]:
-        result: list[str] = []
-        seen: set[str] = set()
+        value: str,
+    ) -> str:
+        return re.sub(r"[^A-Z0-9]", "", str(value or "").upper())
+
+    def _unique_values(
+        self,
+        values,
+    ):
+        result = []
+        seen = set()
 
         for value in values:
-            normalized = NameNormalizer.normalize(
-                value,
-            )
+            normalized = str(value or "").strip().upper()
 
             if not normalized:
                 continue
@@ -938,12 +1155,28 @@ class Phase2MetadataGenerator:
             if normalized in seen:
                 continue
 
-            seen.add(
-                normalized,
+            seen.add(normalized)
+            result.append(normalized)
+
+        return result
+
+    def _dedupe_candidates(
+        self,
+        candidates,
+    ):
+        result = []
+        seen = set()
+
+        for candidate in candidates:
+            key = (
+                candidate.get("record", ""),
+                candidate.get("column", ""),
             )
 
-            result.append(
-                normalized,
-            )
+            if key in seen:
+                continue
+
+            seen.add(key)
+            result.append(candidate)
 
         return result

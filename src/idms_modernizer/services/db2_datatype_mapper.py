@@ -1,16 +1,27 @@
 import re
 
-print("LOADED DB2DatatypeMapper VERSION DEBUG-PIC-PARENS-V-COMP3-FIX-2026-07-30-2")
-
 
 class DB2DatatypeMapper:
+    """
+    Generic DB2 datatype mapper for Schema Listing conversion.
+
+    Rules:
+    - Sheet Mapping and DB2 model must use the same datatype logic.
+    - Numeric COBOL PIC always maps to DECIMAL.
+    - Do not emit SMALLINT, INTEGER, or BIGINT from Schema Listing fields.
+    - Character PIC maps to CHAR / VARCHAR based on length.
+    - DATE and TIMESTAMP are preserved.
+    """
+
     DEFAULT_CHAR_LENGTH = 1
     DEFAULT_DECIMAL_PRECISION = 18
     DEFAULT_DECIMAL_SCALE = 0
-    DEBUG = True
+    DEBUG = False
 
     @staticmethod
-    def map(field) -> str:
+    def map(
+        field,
+    ) -> str:
         datatype = (
             getattr(field, "datatype", None)
             or getattr(field, "data_type", None)
@@ -29,24 +40,17 @@ class DB2DatatypeMapper:
 
         picture = str(picture or "").strip()
 
-        length = (
-            getattr(field, "length", None)
-            or getattr(field, "precision", None)
-            or getattr(field, "storage_length", None)
-            or getattr(field, "physical_length", None)
-            or getattr(field, "byte_length", None)
+        length = DB2DatatypeMapper.first_present(
+            getattr(field, "length", None),
+            getattr(field, "precision", None),
+            getattr(field, "logical_length", None),
+            getattr(field, "storage_length", None),
+            getattr(field, "physical_length", None),
+            getattr(field, "byte_length", None),
+            getattr(field, "bytes", None),
         )
 
         scale = getattr(field, "scale", None)
-
-        if DB2DatatypeMapper.DEBUG:
-            print(
-                "DB2_MAP_DEBUG_INPUT",
-                f"datatype={datatype}",
-                f"picture={repr(picture)}",
-                f"length={length}",
-                f"scale={scale}",
-            )
 
         if datatype == "DATE":
             return "DATE"
@@ -54,51 +58,27 @@ class DB2DatatypeMapper:
         if datatype in {"TIMESTAMP", "DATETIME"}:
             return "TIMESTAMP"
 
+        if datatype == "TIME":
+            return "TIME"
+
         if picture:
-            result = DB2DatatypeMapper.map_picture(
+            return DB2DatatypeMapper.map_picture(
                 picture=picture,
                 fallback_length=length,
                 fallback_scale=scale,
+                fallback_datatype=datatype,
             )
 
-            if DB2DatatypeMapper.DEBUG:
-                print(
-                    "DB2_MAP_DEBUG_RESULT",
-                    f"picture={repr(picture)}",
-                    f"result={result}",
-                )
-
-            return result
-
-        if datatype in {"DECIMAL", "NUMERIC", "COMP", "COMP-3"}:
-            precision = DB2DatatypeMapper.safe_int(
-                value=length,
-                default=DB2DatatypeMapper.DEFAULT_DECIMAL_PRECISION,
-            )
-
-            actual_scale = DB2DatatypeMapper.safe_int(
-                value=scale,
-                default=DB2DatatypeMapper.DEFAULT_DECIMAL_SCALE,
-            )
-
-            return DB2DatatypeMapper.format_decimal(
-                precision=precision,
-                scale=actual_scale,
-                force_scale=actual_scale > 0,
-            )
-
-        if datatype in {"CHAR", "VARCHAR", "DISPLAY", "TEXT", "ALPHANUMERIC"}:
-            actual_length = DB2DatatypeMapper.safe_int(
-                value=length,
-                default=DB2DatatypeMapper.DEFAULT_CHAR_LENGTH,
-            )
-
-            return f"CHAR({actual_length})"
-
-        return f"CHAR({DB2DatatypeMapper.DEFAULT_CHAR_LENGTH})"
+        return DB2DatatypeMapper.map_without_picture(
+            fallback_datatype=datatype,
+            fallback_length=length,
+            fallback_scale=scale,
+        )
 
     @staticmethod
-    def map_datatype(field) -> str:
+    def map_datatype(
+        field,
+    ) -> str:
         return DB2DatatypeMapper.map(
             field=field,
         )
@@ -108,34 +88,22 @@ class DB2DatatypeMapper:
         picture: str,
         fallback_length=None,
         fallback_scale=None,
+        fallback_datatype: str = "",
     ) -> str:
         clean = DB2DatatypeMapper.clean_picture(
             picture=picture,
         )
 
         if not clean:
-            return f"CHAR({DB2DatatypeMapper.DEFAULT_CHAR_LENGTH})"
-
-        clean_upper = clean.upper()
-
-        has_comp3 = "COMP-3" in clean_upper
-        has_comp = bool(re.search(r"\bCOMP\b", clean_upper)) and not has_comp3
+            return DB2DatatypeMapper.map_without_picture(
+                fallback_datatype=fallback_datatype,
+                fallback_length=fallback_length,
+                fallback_scale=fallback_scale,
+            )
 
         core = DB2DatatypeMapper.picture_core(
             picture=clean,
         )
-
-        if DB2DatatypeMapper.DEBUG:
-            print(
-                "DB2_MAP_PICTURE_DEBUG_INPUT",
-                f"picture={repr(picture)}",
-                f"clean={repr(clean)}",
-                f"core={repr(core)}",
-                f"has_comp3={has_comp3}",
-                f"has_comp={has_comp}",
-                f"fallback_length={fallback_length}",
-                f"fallback_scale={fallback_scale}",
-            )
 
         if DB2DatatypeMapper.picture_is_char(core):
             length = DB2DatatypeMapper.char_length(
@@ -143,38 +111,21 @@ class DB2DatatypeMapper:
                 fallback_length=fallback_length,
             )
 
-            result = f"CHAR({length})"
+            if length <= 1:
+                return "CHAR(1)"
 
-            if DB2DatatypeMapper.DEBUG:
-                print(
-                    "DB2_MAP_PICTURE_DEBUG_RESULT",
-                    f"core={repr(core)}",
-                    f"result={result}",
-                )
-
-            return result
+            return f"VARCHAR({length})"
 
         if DB2DatatypeMapper.picture_is_decimal(core):
             precision, scale = DB2DatatypeMapper.decimal_precision_scale(
                 picture=core,
             )
 
-            result = DB2DatatypeMapper.format_decimal(
+            return DB2DatatypeMapper.format_decimal(
                 precision=precision,
                 scale=scale,
                 force_scale=True,
             )
-
-            if DB2DatatypeMapper.DEBUG:
-                print(
-                    "DB2_MAP_PICTURE_DEBUG_RESULT",
-                    f"core={repr(core)}",
-                    f"precision={precision}",
-                    f"scale={scale}",
-                    f"result={result}",
-                )
-
-            return result
 
         if DB2DatatypeMapper.picture_is_numeric(core):
             precision = DB2DatatypeMapper.numeric_precision(
@@ -182,58 +133,89 @@ class DB2DatatypeMapper:
                 fallback_length=fallback_length,
             )
 
-            if has_comp3 or has_comp:
-                result = DB2DatatypeMapper.format_decimal(
-                    precision=precision,
-                    scale=0,
-                    force_scale=True,
-                )
-            else:
-                result = DB2DatatypeMapper.format_decimal(
-                    precision=precision,
-                    scale=0,
-                    force_scale=False,
-                )
+            return DB2DatatypeMapper.format_decimal(
+                precision=precision,
+                scale=0,
+                force_scale=False,
+            )
 
-            if DB2DatatypeMapper.DEBUG:
-                print(
-                    "DB2_MAP_PICTURE_DEBUG_RESULT",
-                    f"core={repr(core)}",
-                    f"precision={precision}",
-                    "scale=0",
-                    f"result={result}",
-                )
-
-            return result
-
-        precision = DB2DatatypeMapper.safe_int(
-            value=fallback_length,
-            default=DB2DatatypeMapper.DEFAULT_DECIMAL_PRECISION,
+        return DB2DatatypeMapper.map_without_picture(
+            fallback_datatype=fallback_datatype,
+            fallback_length=fallback_length,
+            fallback_scale=fallback_scale,
         )
 
-        scale = DB2DatatypeMapper.safe_int(
-            value=fallback_scale,
-            default=DB2DatatypeMapper.DEFAULT_DECIMAL_SCALE,
-        )
+    @staticmethod
+    def map_without_picture(
+        fallback_datatype: str,
+        fallback_length=None,
+        fallback_scale=None,
+    ) -> str:
+        datatype = str(fallback_datatype or "").strip().upper()
 
-        if has_comp3 or has_comp:
-            result = DB2DatatypeMapper.format_decimal(
+        if datatype == "DATE":
+            return "DATE"
+
+        if datatype in {"TIMESTAMP", "DATETIME"}:
+            return "TIMESTAMP"
+
+        if datatype == "TIME":
+            return "TIME"
+
+        if datatype == "SMALLINT":
+            return "DECIMAL(4)"
+
+        if datatype in {"INTEGER", "INT"}:
+            return "DECIMAL(9)"
+
+        if datatype == "BIGINT":
+            return "DECIMAL(18)"
+
+        if datatype in {"DECIMAL", "NUMERIC", "COMP", "COMP-3"}:
+            precision = DB2DatatypeMapper.safe_int(
+                value=fallback_length,
+                default=DB2DatatypeMapper.DEFAULT_DECIMAL_PRECISION,
+            )
+
+            scale = DB2DatatypeMapper.safe_int(
+                value=fallback_scale,
+                default=DB2DatatypeMapper.DEFAULT_DECIMAL_SCALE,
+            )
+
+            return DB2DatatypeMapper.format_decimal(
                 precision=precision,
                 scale=scale,
-                force_scale=True,
-            )
-        else:
-            result = f"CHAR({DB2DatatypeMapper.DEFAULT_CHAR_LENGTH})"
-
-        if DB2DatatypeMapper.DEBUG:
-            print(
-                "DB2_MAP_PICTURE_DEBUG_FALLBACK",
-                f"picture={repr(picture)}",
-                f"core={repr(core)}",
-                f"result={result}",
+                force_scale=scale > 0,
             )
 
-        return result
+        if datatype == "CHAR":
+            length = DB2DatatypeMapper.safe_int(
+                value=fallback_length,
+                default=DB2DatatypeMapper.DEFAULT_CHAR_LENGTH,
+            )
+
+            return f"CHAR({length})"
+
+        if datatype in {"VARCHAR", "DISPLAY", "TEXT", "ALPHANUMERIC"}:
+            length = DB2DatatypeMapper.safe_int(
+                value=fallback_length,
+                default=DB2DatatypeMapper.DEFAULT_CHAR_LENGTH,
+            )
+
+            if length <= 1:
+                return "CHAR(1)"
+
+            return f"VARCHAR({length})"
+
+        length = DB2DatatypeMapper.safe_int(
+            value=fallback_length,
+            default=DB2DatatypeMapper.DEFAULT_CHAR_LENGTH,
+        )
+
+        if length <= 1:
+            return "CHAR(1)"
+
+        return f"VARCHAR({length})"
 
     @staticmethod
     def clean_picture(
@@ -248,7 +230,7 @@ class DB2DatatypeMapper:
 
     @staticmethod
     def picture_core(
-        picture: str,
+        picture: str | None,
     ) -> str:
         text = str(picture or "").upper()
         text = text.replace("PICTURE", "")
@@ -269,50 +251,10 @@ class DB2DatatypeMapper:
     ) -> bool:
         text = str(picture or "").upper()
 
-        if re.fullmatch(r"X[(][0-9]+[)]", text):
-            return True
+        if text.startswith("X(") and text.endswith(")"):
+            return DB2DatatypeMapper.extract_parenthesized_int(text) is not None
 
-        if re.fullmatch(r"X+", text):
-            return True
-
-        return False
-
-    @staticmethod
-    def picture_is_numeric(
-        picture: str,
-    ) -> bool:
-        text = str(picture or "").upper()
-
-        if re.fullmatch(r"S?9[(][0-9]+[)]", text):
-            return True
-
-        if re.fullmatch(r"S?9+", text):
-            return True
-
-        return False
-
-    @staticmethod
-    def picture_is_decimal(
-        picture: str,
-    ) -> bool:
-        text = str(picture or "").upper()
-
-        if "V" not in text:
-            return False
-
-        if re.fullmatch(r"S?9[(][0-9]+[)]V9[(][0-9]+[)]", text):
-            return True
-
-        if re.fullmatch(r"S?9[(][0-9]+[)]V9+", text):
-            return True
-
-        if re.fullmatch(r"S?9+V9[(][0-9]+[)]", text):
-            return True
-
-        if re.fullmatch(r"S?9+V9+", text):
-            return True
-
-        return False
+        return bool(text) and set(text) == {"X"}
 
     @staticmethod
     def char_length(
@@ -321,10 +263,11 @@ class DB2DatatypeMapper:
     ) -> int:
         text = str(picture or "").upper()
 
-        match = re.fullmatch(r"X[(]([0-9]+)[)]", text)
+        if text.startswith("X(") and text.endswith(")"):
+            parsed = DB2DatatypeMapper.extract_parenthesized_int(text)
 
-        if match:
-            return int(match.group(1))
+            if parsed is not None:
+                return parsed
 
         if re.fullmatch(r"X+", text):
             return len(text)
@@ -333,6 +276,28 @@ class DB2DatatypeMapper:
             value=fallback_length,
             default=DB2DatatypeMapper.DEFAULT_CHAR_LENGTH,
         )
+
+    @staticmethod
+    def picture_is_numeric(
+        picture: str,
+    ) -> bool:
+        text = str(picture or "").upper()
+
+        if text.startswith("S"):
+            text = text[1:]
+
+        return "9" in text and "V" not in text
+
+    @staticmethod
+    def picture_is_decimal(
+        picture: str,
+    ) -> bool:
+        text = str(picture or "").upper()
+
+        if text.startswith("S"):
+            text = text[1:]
+
+        return "9" in text and "V" in text
 
     @staticmethod
     def numeric_precision(
@@ -351,7 +316,7 @@ class DB2DatatypeMapper:
 
             return precision
 
-        match = re.fullmatch(r"9[(]([0-9]+)[)]", text)
+        match = re.fullmatch(r"9$(\d+)$", text)
 
         if match:
             return int(match.group(1))
@@ -426,7 +391,7 @@ class DB2DatatypeMapper:
                 close_index = text.find(")", index + 2)
 
                 if close_index != -1:
-                    number_text = text[index + 2:close_index].strip()
+                    number_text = text[index + 2 : close_index].strip()
 
                     if number_text.isdigit():
                         total += int(number_text)
@@ -437,14 +402,6 @@ class DB2DatatypeMapper:
             index += 1
 
         return total
-
-    @staticmethod
-    def count_9_digits(
-        value: str,
-    ) -> int:
-        return DB2DatatypeMapper.count_numeric_digits(
-            value=value,
-        )
 
     @staticmethod
     def format_decimal(
@@ -468,6 +425,17 @@ class DB2DatatypeMapper:
         return f"DECIMAL({actual_precision})"
 
     @staticmethod
+    def extract_parenthesized_int(
+        value: str,
+    ) -> int | None:
+        match = re.search(r"$(\d+)$", str(value or ""))
+
+        if not match:
+            return None
+
+        return int(match.group(1))
+
+    @staticmethod
     def safe_int(
         value,
         default: int,
@@ -484,3 +452,18 @@ class DB2DatatypeMapper:
             return int(text)
         except Exception:
             return default
+
+    @staticmethod
+    def first_present(
+        *values,
+    ):
+        for value in values:
+            if value is None:
+                continue
+
+            if isinstance(value, str) and not value.strip():
+                continue
+
+            return value
+
+        return None

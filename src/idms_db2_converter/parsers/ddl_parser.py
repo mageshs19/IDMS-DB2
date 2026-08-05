@@ -5,7 +5,7 @@ from idms_db2_converter.models import (
     Column,
     Record,
     Relationship,
-    SchemaModel
+    SchemaModel,
 )
 
 
@@ -13,32 +13,45 @@ class DDLParser:
     """
     Robust DB2 DDL parser for Phase 2.
 
-    This version uses manual datatype parsing instead of fragile regex-only
-    datatype parsing.
+    Supports:
+    - CREATE TABLE with table name and opening parenthesis on separate lines.
+    - CREATE TABLE with blank lines before opening parenthesis.
+    - CHAR(n), VARCHAR(n), DECIMAL(p), DECIMAL(p,s).
+    - DATE, TIME, TIMESTAMP.
+    - Composite primary keys.
+    - Composite foreign keys.
+    - ALTER TABLE ADD FOREIGN KEY.
+    - Schema-qualified table names.
+    - Quoted identifiers.
 
-    Fixes:
-    - VARCHAR(3) being skipped
-    - VARCHAR(45) being skipped
-    - CHAR(1) being skipped
-    - DECIMAL(18,0) being skipped
-    - Missing columns in final Phase 2 schema
+    Schema Listing datatype rule:
+    - SMALLINT, INTEGER, BIGINT are normalized to DECIMAL equivalents.
+    - CHAR(n), VARCHAR(n), DECIMAL(p,s) must preserve length/precision/scale.
     """
 
     DEBUG = True
 
+    CONSTRAINT_STARTERS = {
+        "CONSTRAINT",
+        "PRIMARY",
+        "FOREIGN",
+        "UNIQUE",
+        "CHECK",
+    }
+
     INLINE_PRIMARY_KEY = re.compile(
         r"\bPRIMARY\s+KEY\b",
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     INLINE_NOT_NULL = re.compile(
         r"\bNOT\s+NULL\b",
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     TABLE_PRIMARY_KEY = re.compile(
         r"\bPRIMARY\s+KEY\s*$(?P<columns>.*?)$",
-        re.IGNORECASE | re.DOTALL
+        re.IGNORECASE | re.DOTALL,
     )
 
     TABLE_FOREIGN_KEY = re.compile(
@@ -46,43 +59,34 @@ class DDLParser:
         \bFOREIGN\s+KEY\s*
         $(?P<child_cols>.*?)$
         \s+REFERENCES\s+
-        (?P<parent_table>(?:[A-Z0-9_]+\.)?[A-Z0-9_]+)
+        (?P<parent_table>(?:"[^"]+"|[A-Z0-9_]+)(?:\.(?:"[^"]+"|[A-Z0-9_]+))?)
         \s*
         $(?P<parent_cols>.*?)$
         """,
-        re.IGNORECASE | re.DOTALL | re.VERBOSE
+        re.IGNORECASE | re.DOTALL | re.VERBOSE,
     )
 
     ALTER_TABLE_FK = re.compile(
         r"""
         \bALTER\s+TABLE\s+
-        (?P<child_table>(?:[A-Z0-9_]+\.)?[A-Z0-9_]+)
+        (?P<child_table>(?:"[^"]+"|[A-Z0-9_]+)(?:\.(?:"[^"]+"|[A-Z0-9_]+))?)
         .*?
         \bFOREIGN\s+KEY\s*
         $(?P<child_cols>.*?)$
         \s+REFERENCES\s+
-        (?P<parent_table>(?:[A-Z0-9_]+\.)?[A-Z0-9_]+)
+        (?P<parent_table>(?:"[^"]+"|[A-Z0-9_]+)(?:\.(?:"[^"]+"|[A-Z0-9_]+))?)
         \s*
         $(?P<parent_cols>.*?)$
         """,
-        re.IGNORECASE | re.DOTALL | re.VERBOSE
+        re.IGNORECASE | re.DOTALL | re.VERBOSE,
     )
-
-    CONSTRAINT_STARTERS = {
-        "CONSTRAINT",
-        "PRIMARY",
-        "FOREIGN",
-        "UNIQUE",
-        "CHECK"
-    }
 
     def parse(
         self,
-        ddl: str
+        ddl: str,
     ) -> SchemaModel:
-
         self._debug(
-            "USING DDL_PARSER VERSION MANUAL-DATATYPE-2026-07-01"
+            "USING DDL_PARSER VERSION FIXED-DATATYPE-PARENS-COMPOSITE-2026-08-05"
         )
 
         schema = SchemaModel()
@@ -95,16 +99,12 @@ class DDLParser:
             f"DDL INPUT LENGTH: {len(ddl)}"
         )
 
-        self._debug(
-            f"DDL HAS CREATE TABLE: {'CREATE TABLE' in ddl.upper()}"
-        )
-
         ddl = self.remove_comments(
-            ddl
+            ddl=ddl,
         )
 
         create_statements = self._extract_create_table_statements(
-            ddl
+            ddl=ddl,
         )
 
         self._debug(
@@ -122,22 +122,21 @@ class DDLParser:
             record = Record(
                 name=table_name,
                 primary_key=None,
-                fields={}
+                primary_keys=[],
+                fields={},
             )
 
-            schema.record_table_map[
-                table_name
-            ] = table_name
+            schema.record_table_map[table_name] = table_name
+
+            pending_foreign_keys = []
 
             entries = self.split_entries(
-                body
+                body=body,
             )
 
             self._debug(
                 f"DDL PARSER TABLE {table_name} ENTRY COUNT: {len(entries)}"
             )
-
-            pending_foreign_keys: list[dict] = []
 
             for entry in entries:
                 entry = entry.strip()
@@ -146,65 +145,55 @@ class DDLParser:
                     continue
 
                 first_word = self._first_word(
-                    entry
+                    entry=entry,
                 )
 
                 if first_word in self.CONSTRAINT_STARTERS:
                     self._parse_constraint_entry(
                         record=record,
                         entry=entry,
-                        pending_foreign_keys=pending_foreign_keys
+                        pending_foreign_keys=pending_foreign_keys,
                     )
                     continue
 
                 column = self._parse_column_entry(
                     entry=entry,
-                    table_name=table_name
+                    table_name=table_name,
                 )
 
                 if column is None:
                     continue
 
-                record.fields[
-                    column.name
-                ] = column
+                record.fields[column.name] = column
 
                 if self.INLINE_PRIMARY_KEY.search(entry):
-                    record.primary_key = column.name
-                    column.nullable = False
+                    self._set_primary_keys(
+                        record=record,
+                        primary_keys=[column.name],
+                    )
 
-            schema.records[
-                table_name
-            ] = record
-
-            self._debug(
-                f"DDL PARSER TABLE {table_name}: "
-                f"{len(record.fields)} columns, PK={record.primary_key}"
-            )
-
-            for field_name, field in record.fields.items():
-                self._debug(
-                    f"  COLUMN {field_name}: "
-                    f"{field.datatype}({field.length},{field.scale}) "
-                    f"NULLABLE={field.nullable}"
-                )
+            schema.records[table_name] = record
 
             for foreign_key in pending_foreign_keys:
                 self._add_relationship(
                     schema=schema,
                     child_table=table_name,
-                    child_fk=foreign_key["child_fk"],
+                    child_fks=foreign_key["child_fks"],
                     parent_table=foreign_key["parent_table"],
-                    parent_key=foreign_key["parent_key"]
+                    parent_keys=foreign_key["parent_keys"],
                 )
+
+            self._debug_record(
+                record=record,
+            )
 
         self._parse_alter_table_foreign_keys(
             ddl=ddl,
-            schema=schema
+            schema=schema,
         )
 
         self._validate(
-            schema
+            schema=schema,
         )
 
         if "CREATE TABLE" in ddl.upper() and not schema.records:
@@ -216,99 +205,147 @@ class DDLParser:
 
     def remove_comments(
         self,
-        ddl: str
+        ddl: str,
     ) -> str:
-
         ddl = re.sub(
             r"--.*?$",
             "",
             ddl,
-            flags=re.MULTILINE
+            flags=re.MULTILINE,
         )
 
         ddl = re.sub(
             r"/\*.*?\*/",
             "",
             ddl,
-            flags=re.DOTALL
+            flags=re.DOTALL,
         )
 
         return ddl
 
     def _extract_create_table_statements(
         self,
-        ddl: str
-    ) -> list[dict]:
+        ddl: str,
+    ) -> list[dict[str, str]]:
+        statements = []
+        upper = ddl.upper()
+        marker = "CREATE TABLE"
+        position = 0
 
-        results: list[dict] = []
-
-        pattern = re.compile(
-            r"\bCREATE\s+TABLE\s+(?P<table>(?:[A-Z0-9_]+\.)?[A-Z0-9_]+)",
-            re.IGNORECASE
-        )
-
-        for match in pattern.finditer(ddl):
-            table_name = self._normalize_name(
-                match.group("table")
+        while True:
+            start = upper.find(
+                marker,
+                position,
             )
+
+            if start < 0:
+                break
+
+            name_start = start + len(marker)
+
+            while name_start < len(ddl) and ddl[name_start].isspace():
+                name_start += 1
+
+            if name_start >= len(ddl):
+                break
+
+            table_name, name_end = self._read_identifier(
+                text=ddl,
+                start=name_start,
+            )
+
+            table_name = self._normalize_name(
+                table_name,
+            )
+
+            if not table_name:
+                position = name_start + 1
+                continue
 
             open_index = ddl.find(
                 "(",
-                match.end()
+                name_end,
             )
 
             if open_index < 0:
-                self._debug(
-                    f"DDL PARSER TABLE {table_name}: no opening parenthesis found"
-                )
+                position = name_end
                 continue
 
             close_index = self._find_matching_parenthesis(
                 text=ddl,
-                open_index=open_index
+                open_index=open_index,
             )
 
-            if close_index < 0:
-                self._debug(
-                    f"DDL PARSER TABLE {table_name}: no closing parenthesis found"
+            if close_index is None:
+                raise ConversionError(
+                    f"CREATE TABLE {table_name} has no matching closing parenthesis."
                 )
-                continue
 
-            body = ddl[
-                open_index + 1:close_index
-            ]
+            body = ddl[open_index + 1 : close_index]
 
-            results.append(
+            statements.append(
                 {
                     "table_name": table_name,
-                    "body": body
+                    "body": body,
                 }
             )
 
-        return results
+            position = close_index + 1
+
+        return statements
+
+    def _read_identifier(
+        self,
+        text: str,
+        start: int,
+    ) -> tuple[str, int]:
+        if start >= len(text):
+            return "", start
+
+        if text[start] == '"':
+            end = start + 1
+
+            while end < len(text):
+                if text[end] == '"':
+                    return text[start : end + 1], end + 1
+
+                end += 1
+
+            return text[start:], len(text)
+
+        end = start
+
+        while end < len(text):
+            char = text[end]
+
+            if char.isspace() or char == "(":
+                break
+
+            end += 1
+
+        return text[start:end], end
 
     def _find_matching_parenthesis(
         self,
         text: str,
-        open_index: int
-    ) -> int:
-
+        open_index: int,
+    ) -> int | None:
         depth = 0
-        quote = None
+        in_single_quote = False
+        in_double_quote = False
 
         for index in range(open_index, len(text)):
             char = text[index]
 
-            if quote:
-                if char == quote:
-                    quote = None
+            if char == "'" and not in_double_quote:
+                in_single_quote = not in_single_quote
                 continue
 
-            if char in {
-                "'",
-                '"'
-            }:
-                quote = char
+            if char == '"' and not in_single_quote:
+                in_double_quote = not in_double_quote
+                continue
+
+            if in_single_quote or in_double_quote:
                 continue
 
             if char == "(":
@@ -321,53 +358,48 @@ class DDLParser:
                 if depth == 0:
                     return index
 
-        return -1
+        return None
 
     def split_entries(
         self,
-        body: str
+        body: str,
     ) -> list[str]:
-
-        entries: list[str] = []
-        current: list[str] = []
+        entries = []
+        current = []
         depth = 0
-        quote = None
+        in_single_quote = False
+        in_double_quote = False
 
         for char in body:
-            if quote:
-                current.append(char)
-
-                if char == quote:
-                    quote = None
-
-                continue
-
-            if char in {
-                "'",
-                '"'
-            }:
-                quote = char
+            if char == "'" and not in_double_quote:
+                in_single_quote = not in_single_quote
                 current.append(char)
                 continue
 
-            if char == "(":
-                depth += 1
+            if char == '"' and not in_single_quote:
+                in_double_quote = not in_double_quote
                 current.append(char)
                 continue
 
-            if char == ")":
-                depth -= 1
-                current.append(char)
-                continue
+            if not in_single_quote and not in_double_quote:
+                if char == "(":
+                    depth += 1
+                    current.append(char)
+                    continue
 
-            if char == "," and depth == 0:
-                entry = "".join(current).strip()
+                if char == ")":
+                    depth -= 1
+                    current.append(char)
+                    continue
 
-                if entry:
-                    entries.append(entry)
+                if char == "," and depth == 0:
+                    entry = "".join(current).strip()
 
-                current = []
-                continue
+                    if entry:
+                        entries.append(entry)
+
+                    current = []
+                    continue
 
             current.append(char)
 
@@ -382,148 +414,88 @@ class DDLParser:
         self,
         record: Record,
         entry: str,
-        pending_foreign_keys: list[dict]
+        pending_foreign_keys: list[dict],
     ) -> None:
+        normalized_entry = self._remove_constraint_name(
+            entry=entry,
+        )
 
         primary_key_match = self.TABLE_PRIMARY_KEY.search(
-            entry
+            normalized_entry,
         )
 
         if primary_key_match:
-            primary_key = self._first_column(
-                primary_key_match.group("columns")
+            primary_keys = self._column_list(
+                primary_key_match.group("columns"),
             )
 
-            if primary_key:
-                record.primary_key = primary_key
-
-                if primary_key in record.fields:
-                    record.fields[
-                        primary_key
-                    ].nullable = False
-
-            self._debug(
-                f"DDL PARSER PRIMARY KEY FOR {record.name}: {record.primary_key}"
-            )
+            if primary_keys:
+                self._set_primary_keys(
+                    record=record,
+                    primary_keys=primary_keys,
+                )
 
             return
 
         foreign_key_match = self.TABLE_FOREIGN_KEY.search(
-            entry
+            normalized_entry,
         )
 
         if foreign_key_match:
-            child_fk = self._first_column(
-                foreign_key_match.group("child_cols")
+            child_fks = self._column_list(
+                foreign_key_match.group("child_cols"),
             )
 
             parent_table = self._normalize_name(
-                foreign_key_match.group("parent_table")
+                foreign_key_match.group("parent_table"),
             )
 
-            parent_key = self._first_column(
-                foreign_key_match.group("parent_cols")
+            parent_keys = self._column_list(
+                foreign_key_match.group("parent_cols"),
             )
 
-            if child_fk and parent_table and parent_key:
-                pending_foreign_keys.append(
-                    {
-                        "child_fk": child_fk,
-                        "parent_table": parent_table,
-                        "parent_key": parent_key
-                    }
+            if child_fks and parent_table and parent_keys:
+                self._validate_key_pairing(
+                    context=f"FK in table {record.name}",
+                    child_fks=child_fks,
+                    parent_keys=parent_keys,
                 )
 
-                self._debug(
-                    f"DDL PARSER FK: {child_fk} -> {parent_table}({parent_key})"
+                pending_foreign_keys.append(
+                    {
+                        "child_fks": child_fks,
+                        "parent_table": parent_table,
+                        "parent_keys": parent_keys,
+                    }
                 )
 
             return
 
-    def _parse_alter_table_foreign_keys(
+    def _remove_constraint_name(
         self,
-        ddl: str,
-        schema: SchemaModel
-    ) -> None:
+        entry: str,
+    ) -> str:
+        tokens = entry.strip().split()
 
-        for match in self.ALTER_TABLE_FK.finditer(ddl):
-            child_table = self._normalize_name(
-                match.group("child_table")
-            )
+        if len(tokens) >= 3 and tokens[0].upper() == "CONSTRAINT":
+            return " ".join(tokens[2:])
 
-            child_fk = self._first_column(
-                match.group("child_cols")
-            )
-
-            parent_table = self._normalize_name(
-                match.group("parent_table")
-            )
-
-            parent_key = self._first_column(
-                match.group("parent_cols")
-            )
-
-            if not child_table:
-                continue
-
-            if not child_fk:
-                continue
-
-            if not parent_table:
-                continue
-
-            if not parent_key:
-                continue
-
-            self._add_relationship(
-                schema=schema,
-                child_table=child_table,
-                child_fk=child_fk,
-                parent_table=parent_table,
-                parent_key=parent_key
-            )
-
-    def _add_relationship(
-        self,
-        schema: SchemaModel,
-        child_table: str,
-        child_fk: str,
-        parent_table: str,
-        parent_key: str
-    ) -> None:
-
-        child_table = self._normalize_name(child_table)
-        child_fk = self._normalize_name(child_fk)
-        parent_table = self._normalize_name(parent_table)
-        parent_key = self._normalize_name(parent_key)
-
-        set_name = f"{parent_table}-{child_table}"
-
-        schema.relationships[set_name] = Relationship(
-            set_name=set_name,
-            parent_record=parent_table,
-            child_record=child_table,
-            cardinality="1:N",
-            parent_key=parent_key,
-            child_fk=child_fk,
-            order_by=[child_fk]
-        )
+        return entry
 
     def _parse_column_entry(
         self,
         entry: str,
-        table_name: str
+        table_name: str,
     ) -> Column | None:
-
         entry = entry.strip()
 
         if not entry:
             return None
 
         match = re.match(
-            r"^(?P<name>[A-Z0-9_]+)\s+(?P<datatype>.+)$",
+            r'^(?P<name>"[^"]+"|[A-Z0-9_]+)\s+(?P<datatype>.+)$',
             entry,
-            flags=re.IGNORECASE | re.DOTALL
+            flags=re.IGNORECASE | re.DOTALL,
         )
 
         if not match:
@@ -533,25 +505,30 @@ class DDLParser:
             return None
 
         column_name = self._normalize_name(
-            match.group("name")
+            match.group("name"),
         )
 
         datatype_text = match.group("datatype").strip()
 
         datatype, length, scale = self._parse_datatype(
-            datatype_text
+            datatype_text,
         )
 
-        if datatype is None:
+        if not datatype:
             self._debug_unrecognized_datatype(
                 table_name=table_name,
                 column_name=column_name,
-                datatype_text=datatype_text
+                datatype_text=datatype_text,
             )
             return None
 
         nullable = not bool(
             self.INLINE_NOT_NULL.search(entry)
+            or self.INLINE_PRIMARY_KEY.search(entry)
+        )
+
+        primary_key = bool(
+            self.INLINE_PRIMARY_KEY.search(entry)
         )
 
         return Column(
@@ -559,252 +536,418 @@ class DDLParser:
             datatype=datatype,
             length=length,
             scale=scale,
-            nullable=nullable
+            nullable=nullable,
+            primary_key=primary_key,
         )
 
     def _parse_datatype(
         self,
-        datatype_text: str
+        text: str,
     ) -> tuple[str | None, int | None, int | None]:
-
-        text = self._normalize_datatype_text(
-            datatype_text
+        normalized = self._normalize_datatype_text(
+            text,
         )
 
-        if not text:
-            return (
-                None,
-                None,
-                None
-            )
+        if not normalized:
+            return None, None, None
 
-        datatype_name = self._leading_word(
-            text
+        leading = self._leading_word(
+            normalized,
         )
 
-        if datatype_name in {
-            "VARCHAR",
-            "CHAR",
-            "CHARACTER"
-        }:
-            length = self._manual_first_parenthesized_int(
-                text
+        if leading in {"CHAR", "CHARACTER"}:
+            length = self._first_parenthesized_int(
+                normalized,
             )
 
-            if datatype_name == "CHARACTER":
-                datatype_name = "CHAR"
-
-            if length is None and datatype_name == "CHAR":
+            if length is None:
                 length = 1
 
-            if length is not None:
-                return (
-                    datatype_name,
-                    length,
-                    None
-                )
+            return "CHAR", length, None
 
-        if datatype_name in {
-            "DECIMAL",
-            "NUMERIC"
-        }:
-            precision_scale = self._manual_precision_scale(
-                text
+        if leading in {"VARCHAR", "VARCHAR2"}:
+            length = self._first_parenthesized_int(
+                normalized,
             )
 
-            if precision_scale is not None:
-                precision, scale = precision_scale
+            if length is None:
+                length = 255
 
-                return (
-                    "DECIMAL",
-                    precision,
-                    scale
-                )
+            return "VARCHAR", length, None
 
-        if datatype_name == "SMALLINT":
-            return (
-                "SMALLINT",
-                4,
-                0
+        if normalized.startswith("LONG VARCHAR"):
+            length = self._first_parenthesized_int(
+                normalized,
             )
 
-        if datatype_name in {
-            "INTEGER",
-            "INT"
-        }:
-            return (
-                "INTEGER",
-                9,
-                0
+            if length is None:
+                length = 255
+
+            return "VARCHAR", length, None
+
+        if leading in {"DECIMAL", "NUMERIC", "DEC"}:
+            precision, scale = self._first_parenthesized_pair(
+                normalized,
             )
 
-        if datatype_name == "BIGINT":
-            return (
-                "BIGINT",
-                18,
-                0
-            )
+            if precision is None:
+                precision = 18
 
-        if datatype_name == "DATE":
-            return (
-                "DATE",
-                None,
-                None
-            )
+            if scale is None:
+                scale = 0
 
-        if datatype_name == "TIMESTAMP":
-            return (
-                "TIMESTAMP",
-                None,
-                None
-            )
+            return "DECIMAL", precision, scale
 
-        if datatype_name == "TIME":
-            return (
-                "TIME",
-                None,
-                None
-            )
+        if leading in {"INTEGER", "INT"}:
+            return "DECIMAL", 9, 0
 
-        return (
-            None,
-            None,
-            None
-        )
+        if leading == "BIGINT":
+            return "DECIMAL", 18, 0
 
-    def _normalize_datatype_text(
+        if leading == "SMALLINT":
+            return "DECIMAL", 4, 0
+
+        if leading == "DATE":
+            return "DATE", None, None
+
+        if leading == "TIMESTAMP":
+            return "TIMESTAMP", None, None
+
+        if leading == "TIME":
+            return "TIME", None, None
+
+        if leading in {"DOUBLE", "FLOAT", "REAL"}:
+            return leading, None, None
+
+        return None, None, None
+
+    def _first_parenthesized_int(
         self,
-        datatype_text: str
-    ) -> str:
-
-        text = datatype_text or ""
-
-        text = str(text).strip().upper()
-
-        text = text.replace("（", "(")
-        text = text.replace("）", ")")
-        text = text.replace("，", ",")
-        text = text.replace("\u00a0", " ")
-
-        text = re.sub(
-            r"\s+",
-            " ",
-            text
-        )
-
-        text = re.sub(
-            r"\bNOT\s+NULL\b",
-            "",
-            text,
-            flags=re.IGNORECASE
-        )
-
-        text = re.sub(
-            r"\bPRIMARY\s+KEY\b",
-            "",
-            text,
-            flags=re.IGNORECASE
-        )
-
-        text = re.sub(
-            r"\bDEFAULT\b.*$",
-            "",
-            text,
-            flags=re.IGNORECASE
-        )
-
-        return text.strip()
-
-    def _leading_word(
-        self,
-        text: str
-    ) -> str:
-
-        result = []
-
-        for char in text:
-            if char.isalpha():
-                result.append(char)
-                continue
-
-            break
-
-        return "".join(result).upper()
-
-    def _manual_first_parenthesized_int(
-        self,
-        text: str
+        text: str,
     ) -> int | None:
+        value = str(text or "")
 
-        open_index = text.find("(")
+        open_index = value.find("(")
 
         if open_index < 0:
             return None
 
-        close_index = text.find(")", open_index + 1)
+        close_index = value.find(")", open_index + 1)
 
         if close_index < 0:
             return None
 
-        content = text[
-            open_index + 1:close_index
-        ].strip()
+        content = value[open_index + 1 : close_index].strip()
+
+        if "," in content:
+            content = content.split(",", 1)[0].strip()
 
         if not content.isdigit():
             return None
 
         return int(content)
 
-    def _manual_precision_scale(
+    def _first_parenthesized_pair(
         self,
-        text: str
-    ) -> tuple[int, int] | None:
+        text: str,
+    ) -> tuple[int | None, int | None]:
+        value = str(text or "")
 
-        open_index = text.find("(")
+        open_index = value.find("(")
 
         if open_index < 0:
-            return None
+            return None, None
 
-        close_index = text.find(")", open_index + 1)
+        close_index = value.find(")", open_index + 1)
 
         if close_index < 0:
-            return None
+            return None, None
 
-        content = text[
-            open_index + 1:close_index
-        ].strip()
+        content = value[open_index + 1 : close_index].strip()
+
+        if not content:
+            return None, None
 
         parts = [
             part.strip()
             for part in content.split(",")
         ]
 
-        if len(parts) != 2:
-            return None
+        if not parts:
+            return None, None
 
         if not parts[0].isdigit():
-            return None
+            return None, None
 
-        if not parts[1].isdigit():
-            return None
+        precision = int(parts[0])
+        scale = None
 
-        return (
-            int(parts[0]),
-            int(parts[1])
+        if len(parts) > 1 and parts[1].isdigit():
+            scale = int(parts[1])
+
+        return precision, scale
+
+    def _normalize_datatype_text(
+        self,
+        text: str,
+    ) -> str:
+        value = str(text or "").strip().upper()
+
+        stop_patterns = [
+            r"\bNOT\s+NULL\b",
+            r"\bNULL\b",
+            r"\bPRIMARY\s+KEY\b",
+            r"\bGENERATED\b",
+            r"\bDEFAULT\b",
+            r"\bCONSTRAINT\b",
+            r"\bREFERENCES\b",
+            r"\bCHECK\b",
+            r"\bUNIQUE\b",
+        ]
+
+        stop_positions = []
+
+        for pattern in stop_patterns:
+            match = re.search(
+                pattern,
+                value,
+                flags=re.IGNORECASE,
+            )
+
+            if match:
+                stop_positions.append(
+                    match.start(),
+                )
+
+        if stop_positions:
+            value = value[: min(stop_positions)].strip()
+
+        value = re.sub(
+            r"\s+",
+            " ",
+            value,
         )
+
+        return value
+
+    def _leading_word(
+        self,
+        text: str,
+    ) -> str:
+        match = re.match(
+            r"([A-Z0-9]+)",
+            text.strip().upper(),
+        )
+
+        if not match:
+            return ""
+
+        return match.group(1)
+
+    def _parse_alter_table_foreign_keys(
+        self,
+        ddl: str,
+        schema: SchemaModel,
+    ) -> None:
+        for match in self.ALTER_TABLE_FK.finditer(ddl):
+            child_table = self._normalize_name(
+                match.group("child_table"),
+            )
+
+            child_fks = self._column_list(
+                match.group("child_cols"),
+            )
+
+            parent_table = self._normalize_name(
+                match.group("parent_table"),
+            )
+
+            parent_keys = self._column_list(
+                match.group("parent_cols"),
+            )
+
+            if not child_table:
+                continue
+
+            if child_table not in schema.records:
+                continue
+
+            if not parent_table or parent_table not in schema.records:
+                continue
+
+            if not child_fks or not parent_keys:
+                continue
+
+            self._validate_key_pairing(
+                context=f"ALTER TABLE FK {child_table} -> {parent_table}",
+                child_fks=child_fks,
+                parent_keys=parent_keys,
+            )
+
+            self._add_relationship(
+                schema=schema,
+                child_table=child_table,
+                child_fks=child_fks,
+                parent_table=parent_table,
+                parent_keys=parent_keys,
+            )
+
+    def _add_relationship(
+        self,
+        schema: SchemaModel,
+        child_table: str,
+        child_fks: list[str],
+        parent_table: str,
+        parent_keys: list[str],
+    ) -> None:
+        if child_table not in schema.records:
+            raise ConversionError(
+                f"FK child table {child_table} is not present in schema."
+            )
+
+        if parent_table not in schema.records:
+            raise ConversionError(
+                f"FK parent table {parent_table} is not present in schema."
+            )
+
+        self._validate_key_pairing(
+            context=f"FK {child_table} -> {parent_table}",
+            child_fks=child_fks,
+            parent_keys=parent_keys,
+        )
+
+        child = schema.records[child_table]
+        parent = schema.records[parent_table]
+
+        for child_fk in child_fks:
+            if child_fk not in child.fields:
+                raise ConversionError(
+                    f"FK column {child_table}.{child_fk} is not declared as a column."
+                )
+
+        for parent_key in parent_keys:
+            if parent_key not in parent.fields:
+                raise ConversionError(
+                    f"Referenced column {parent_table}.{parent_key} is not declared as a column."
+                )
+
+        if parent_keys and not getattr(parent, "primary_keys", []):
+            self._set_primary_keys(
+                record=parent,
+                primary_keys=parent_keys,
+            )
+
+        set_name = f"{parent_table}_{child_table}"
+
+        schema.relationships[set_name] = Relationship(
+            set_name=set_name,
+            parent_record=parent_table,
+            child_record=child_table,
+            cardinality="1:N",
+            parent_key=parent_keys[0] if parent_keys else None,
+            child_fk=child_fks[0] if child_fks else None,
+            parent_keys=parent_keys,
+            child_fks=child_fks,
+            order_by=child_fks.copy(),
+        )
+
+    def _set_primary_keys(
+        self,
+        record: Record,
+        primary_keys: list[str],
+    ) -> None:
+        cleaned = []
+
+        for key in primary_keys or []:
+            normalized = self._normalize_name(
+                key,
+            )
+
+            if not normalized:
+                continue
+
+            if normalized in cleaned:
+                continue
+
+            cleaned.append(
+                normalized,
+            )
+
+        if hasattr(record, "set_primary_keys"):
+            record.set_primary_keys(
+                keys=cleaned,
+            )
+        else:
+            record.primary_keys = cleaned
+            record.primary_key = cleaned[0] if cleaned else None
+
+        for key in cleaned:
+            if key in record.fields:
+                record.fields[key].primary_key = True
+                record.fields[key].nullable = False
+
+    def _validate_key_pairing(
+        self,
+        context: str,
+        child_fks: list[str],
+        parent_keys: list[str],
+    ) -> None:
+        if len(child_fks) != len(parent_keys):
+            raise ConversionError(
+                f"{context} has mismatched composite key column counts: "
+                f"{len(child_fks)} child FK column(s), "
+                f"{len(parent_keys)} parent key column(s)."
+            )
+
+    def _column_list(
+        self,
+        text: str,
+    ) -> list[str]:
+        if not text:
+            return []
+
+        result = []
+
+        for item in text.split(","):
+            normalized = self._normalize_name(
+                item,
+            )
+
+            if not normalized:
+                continue
+
+            if normalized in result:
+                continue
+
+            result.append(
+                normalized,
+            )
+
+        return result
 
     def _validate(
         self,
-        schema: SchemaModel
+        schema: SchemaModel,
     ) -> None:
-
-        errors: list[str] = []
+        errors = []
 
         for record in schema.records.values():
-            if record.primary_key and record.primary_key not in record.fields:
-                errors.append(
-                    f"{record.name} primary key {record.primary_key} is not declared as a column."
-                )
+            primary_keys = []
+
+            if hasattr(record, "effective_primary_keys"):
+                primary_keys = record.effective_primary_keys()
+            else:
+                primary_keys = list(getattr(record, "primary_keys", []) or [])
+
+                if getattr(record, "primary_key", None):
+                    if record.primary_key not in primary_keys:
+                        primary_keys.append(record.primary_key)
+
+            for primary_key in primary_keys:
+                if primary_key not in record.fields:
+                    errors.append(
+                        f"{record.name} primary key {primary_key} is not declared as a column."
+                    )
 
             for field_name, field in record.fields.items():
                 if not field.datatype:
@@ -814,45 +957,26 @@ class DDLParser:
 
         if errors:
             raise ConversionError(
-                "\n".join(errors)
+                "\n".join(errors),
             )
 
     def _first_word(
         self,
-        entry: str
+        entry: str,
     ) -> str:
-
         tokens = entry.strip().split()
 
         if not tokens:
             return ""
 
         return self._normalize_name(
-            tokens[0]
-        )
-
-    def _first_column(
-        self,
-        text: str
-    ) -> str | None:
-
-        if not text:
-            return None
-
-        first = text.split(",")[0].strip()
-
-        if not first:
-            return None
-
-        return self._normalize_name(
-            first
+            tokens[0],
         )
 
     def _normalize_name(
         self,
-        value: str | None
+        value: str | None,
     ) -> str:
-
         if not value:
             return ""
 
@@ -866,40 +990,69 @@ class DDLParser:
         if "." in value:
             value = value.split(".")[-1]
 
-        return value.upper()
+        value = value.upper()
+        value = value.replace("-", "_")
+        value = re.sub(
+            r"[^A-Z0-9_]",
+            "_",
+            value,
+        )
+        value = re.sub(
+            r"_+",
+            "_",
+            value,
+        )
+
+        return value.strip("_")
 
     def _debug(
         self,
-        message: str
+        message: str,
     ) -> None:
-
         if self.DEBUG:
             print(message)
+
+    def _debug_record(
+        self,
+        record: Record,
+    ) -> None:
+        if not self.DEBUG:
+            return
+
+        primary_keys = list(getattr(record, "primary_keys", []) or [])
+
+        if not primary_keys and getattr(record, "primary_key", None):
+            primary_keys = [record.primary_key]
+
+        print(
+            f"DDL PARSER TABLE {record.name}: "
+            f"{len(record.fields)} columns, PKS={primary_keys}"
+        )
+
+        for field_name, field in record.fields.items():
+            print(
+                f" COLUMN {field_name}: "
+                f"{field.datatype} ({field.length}, {field.scale}) "
+                f"NULLABLE={field.nullable}"
+            )
 
     def _debug_unrecognized_datatype(
         self,
         table_name: str,
         column_name: str,
-        datatype_text: str
+        datatype_text: str,
     ) -> None:
-
         if not self.DEBUG:
             return
 
         normalized = self._normalize_datatype_text(
-            datatype_text
+            datatype_text,
         )
-
-        char_codes = [
-            ord(char)
-            for char in datatype_text
-        ]
 
         print(
             "DDL PARSER SKIPPED COLUMN "
             f"{table_name}.{column_name}: "
             f"raw={repr(datatype_text)} "
             f"normalized={repr(normalized)} "
-            f"leading={repr(self._leading_word(normalized))} "
-            f"char_codes={char_codes}"
+            f"leading={repr(self._leading_word(normalized))}"
         )

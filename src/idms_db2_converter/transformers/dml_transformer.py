@@ -10,16 +10,17 @@ class DmlTransformer:
     Converts IDMS update DML to DB2 embedded SQL.
 
     Supported mappings:
-    - STORE record  -> INSERT
+    - STORE record -> INSERT
     - MODIFY record -> UPDATE
-    - ERASE record  -> DELETE
+    - ERASE record -> DELETE
     - READY AREA ... USAGE-MODE IS UPDATE -> CONTINUE
     - FINISH -> COMMIT for update programs
 
-    Important behavior:
-    - MODIFY updates only fields moved in the same paragraph before MODIFY.
-    - If changed fields cannot be detected, MODIFY falls back to non-key fields.
-    - Primary key resolution prefers ID columns such as EMP_ID_0415.
+    Composite-key support:
+    - UPDATE WHERE uses all effective primary keys.
+    - DELETE WHERE uses all effective primary keys.
+    - UPDATE excludes all primary key columns from SET list.
+    - Single primary key remains fully supported.
     """
 
     STORE_RECORD = re.compile(
@@ -39,9 +40,9 @@ class DmlTransformer:
 
     READY_UPDATE_BLOCK = re.compile(
         r"""
-        ^\s*READY\s+AREA\s+[A-Z0-9-]+\.?\s*
-        (?:\n\s*USAGE-MODE\s+IS\s+UPDATE\.?\s*)?
-        (?:\n\s*PERFORM\s+IDMS-STATUS\.?\s*)?
+        ^\s*READY\s+AREA\s+[A-Z0-9-]+\.?\s*$
+        (?:\n\s*USAGE-MODE\s+IS\s+UPDATE\.?\s*$)?
+        (?:\n\s*PERFORM\s+IDMS-STATUS\.?\s*$)?
         """,
         re.IGNORECASE | re.MULTILINE | re.VERBOSE,
     )
@@ -66,13 +67,18 @@ class DmlTransformer:
         re.IGNORECASE | re.MULTILINE,
     )
 
+    DB2_CHECK_STATUS_PERFORM = re.compile(
+        r"^\s*PERFORM\s+DB2-CHECK-STATUS\.?\s*$",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
     PARAGRAPH_HEADER = re.compile(
-        r"^\s*[A-Z0-9-]+\.\s*$",
+        r"^\s*([A-Z0-9-]+)\.\s*$",
         re.IGNORECASE | re.MULTILINE,
     )
 
     MOVE_TO_TARGET = re.compile(
-        r"^\s*MOVE\s+.+?\s+TO\s+([A-Z0-9_-]+)\.?\s*$",
+        r"^\s*MOVE\s+.+?\s+TO\s+([A-Z0-9-]+)\.?\s*$",
         re.IGNORECASE,
     )
 
@@ -98,36 +104,45 @@ class DmlTransformer:
         self,
         text: str,
     ) -> str:
-        if not self.has_update_dml():
-            return text
-
-        text = self.remove_ready_update_area(text)
-        text = self.replace_store(text)
-        text = self.replace_modify(text)
-        text = self.replace_erase(text)
-        text = self.replace_finish_with_commit(text)
-        text = self.remove_residual_idms_status(text)
-        text = self.remove_residual_ready_update_lines(text)
-        text = self.fix_continue_concatenation(text)
-        text = self.fix_status_paragraph_formatting(text)
-        text = self.insert_db2_check_status_paragraph(text)
-        text = self.normalize_blank_lines(text)
-
-        return text
-
-    def remove_ready_update_area(
-        self,
-        text: str,
-    ) -> str:
-        return self.READY_UPDATE_BLOCK.sub(
-            "\n       CONTINUE.\n",
+        text = self.replace_ready_update_blocks(
             text,
         )
 
-    def remove_residual_ready_update_lines(
+        text = self.replace_store(
+            text,
+        )
+
+        text = self.replace_modify(
+            text,
+        )
+
+        text = self.replace_erase(
+            text,
+        )
+
+        text = self.replace_finish_with_commit(
+            text,
+        )
+
+        text = self.remove_idms_status_performs(
+            text,
+        )
+
+        text = self.insert_db2_check_status_paragraph(
+            text,
+        )
+
+        return text
+
+    def replace_ready_update_blocks(
         self,
         text: str,
     ) -> str:
+        text = self.READY_UPDATE_BLOCK.sub(
+            "       CONTINUE.",
+            text,
+        )
+
         text = self.READY_AREA_LINE.sub(
             "       CONTINUE.",
             text,
@@ -146,7 +161,10 @@ class DmlTransformer:
     ) -> str:
         def replacement(match: re.Match) -> str:
             record_name = match.group(1).upper()
-            return self.insert_sql(record_name)
+
+            return self.insert_sql(
+                record_name,
+            )
 
         return self.STORE_RECORD.sub(
             replacement,
@@ -171,7 +189,7 @@ class DmlTransformer:
             record_name = match.group(1).upper()
 
             pieces.append(
-                text[last_position:match.start()],
+                text[last_position : match.start()],
             )
 
             changed_columns = self.changed_columns_before_modify(
@@ -184,7 +202,7 @@ class DmlTransformer:
                 self.update_sql(
                     logical_record_name=record_name,
                     changed_columns=changed_columns,
-                ),
+                )
             )
 
             last_position = match.end()
@@ -201,7 +219,10 @@ class DmlTransformer:
     ) -> str:
         def replacement(match: re.Match) -> str:
             record_name = match.group(1).upper()
-            return self.delete_sql(record_name)
+
+            return self.delete_sql(
+                record_name,
+            )
 
         return self.ERASE_RECORD.sub(
             replacement,
@@ -217,7 +238,7 @@ class DmlTransformer:
             text,
         )
 
-    def remove_residual_idms_status(
+    def remove_idms_status_performs(
         self,
         text: str,
     ) -> str:
@@ -225,38 +246,6 @@ class DmlTransformer:
             "",
             text,
         )
-
-    def fix_continue_concatenation(
-        self,
-        text: str,
-    ) -> str:
-        text = re.sub(
-            r"CONTINUE\.\s*PERFORM\s+IDMS-STATUS\.?",
-            "CONTINUE.",
-            text,
-            flags=re.IGNORECASE,
-        )
-
-        text = re.sub(
-            r"CONTINUE\.([A-Z0-9-]+\.)",
-            r"CONTINUE.\n\1",
-            text,
-            flags=re.IGNORECASE,
-        )
-
-        return text
-
-    def fix_status_paragraph_formatting(
-        self,
-        text: str,
-    ) -> str:
-        text = re.sub(
-            r"(?m)^END-IF\.",
-            "       END-IF.",
-            text,
-        )
-
-        return text
 
     def insert_sql(
         self,
@@ -275,14 +264,7 @@ class DmlTransformer:
                 f"STORE references missing record {logical_record_name}."
             )
 
-        columns = list(
-            record.fields.keys(),
-        )
-
-        if not columns:
-            raise ConversionError(
-                f"STORE record {logical_record_name} has no DB2 columns."
-            )
+        columns = list(record.fields.keys())
 
         value_items = [
             self.host_with_indicator(
@@ -296,7 +278,7 @@ class DmlTransformer:
         lines: list[str] = [
             "       EXEC SQL",
             f"            INSERT INTO {physical_record_name}",
-            "               (",
+            "            (",
         ]
 
         lines.extend(
@@ -308,9 +290,9 @@ class DmlTransformer:
 
         lines.extend(
             [
-                "               )",
+                "            )",
                 "            VALUES",
-                "               (",
+                "            (",
             ]
         )
 
@@ -323,7 +305,7 @@ class DmlTransformer:
 
         lines.extend(
             [
-                "               )",
+                "            )",
                 "       END-EXEC.",
                 "       PERFORM DB2-CHECK-STATUS.",
             ]
@@ -349,28 +331,30 @@ class DmlTransformer:
                 f"MODIFY references missing record {logical_record_name}."
             )
 
-        primary_key = self.resolve_primary_key(
+        primary_keys = self.resolve_primary_keys(
             logical_record_name=logical_record_name,
             physical_record_name=physical_record_name,
         )
 
-        if not primary_key:
+        if not primary_keys:
             raise ConversionError(
                 f"MODIFY record {logical_record_name} has no primary key."
             )
+
+        primary_key_set = set(primary_keys)
 
         update_columns = [
             column_name
             for column_name in changed_columns
             if column_name in record.fields
-            and column_name != primary_key
+            and column_name not in primary_key_set
         ]
 
         if not update_columns:
             update_columns = [
                 column_name
                 for column_name in record.fields.keys()
-                if column_name != primary_key
+                if column_name not in primary_key_set
             ]
 
         if not update_columns:
@@ -378,17 +362,9 @@ class DmlTransformer:
                 f"MODIFY record {logical_record_name} has no update columns."
             )
 
-        key_host = Naming.hv(
-            logical_record_name,
-            primary_key,
-        )
+        set_items = []
 
-        lines: list[str] = [
-            "       EXEC SQL",
-            f"            UPDATE {physical_record_name}",
-        ]
-
-        for index, column_name in enumerate(update_columns):
+        for column_name in update_columns:
             column = record.fields[column_name]
 
             host = self.host_with_indicator(
@@ -397,25 +373,37 @@ class DmlTransformer:
                 nullable=column.nullable,
             )
 
-            suffix = "," if index < len(update_columns) - 1 else ""
-
-            if index == 0:
-                lines.append(
-                    f"               SET {column_name} =",
-                )
-            else:
-                lines.append(
-                    f"                   {column_name} =",
-                )
-
-            lines.append(
-                f"                   {host}{suffix}",
+            set_items.append(
+                f"{column_name} = {host}"
             )
+
+        where_items = self.where_items_for_primary_keys(
+            logical_record_name=logical_record_name,
+            primary_keys=primary_keys,
+        )
+
+        lines: list[str] = [
+            "       EXEC SQL",
+            f"            UPDATE {physical_record_name}",
+        ]
+
+        lines.extend(
+            self.sql_assignment_lines(
+                keyword="SET",
+                items=set_items,
+                indent="            ",
+            )
+        )
+
+        lines.extend(
+            self.where_lines(
+                where_items=where_items,
+                indent="            ",
+            )
+        )
 
         lines.extend(
             [
-                f"             WHERE {primary_key} =",
-                f"                   :{key_host}",
                 "       END-EXEC.",
                 "       PERFORM DB2-CHECK-STATUS.",
             ]
@@ -440,31 +428,41 @@ class DmlTransformer:
                 f"ERASE references missing record {logical_record_name}."
             )
 
-        primary_key = self.resolve_primary_key(
+        primary_keys = self.resolve_primary_keys(
             logical_record_name=logical_record_name,
             physical_record_name=physical_record_name,
         )
 
-        if not primary_key:
+        if not primary_keys:
             raise ConversionError(
                 f"ERASE record {logical_record_name} has no primary key."
             )
 
-        key_host = Naming.hv(
-            logical_record_name,
-            primary_key,
+        where_items = self.where_items_for_primary_keys(
+            logical_record_name=logical_record_name,
+            primary_keys=primary_keys,
         )
 
-        return "\n".join(
+        lines = [
+            "       EXEC SQL",
+            f"            DELETE FROM {physical_record_name}",
+        ]
+
+        lines.extend(
+            self.where_lines(
+                where_items=where_items,
+                indent="            ",
+            )
+        )
+
+        lines.extend(
             [
-                "       EXEC SQL",
-                f"            DELETE FROM {physical_record_name}",
-                f"             WHERE {primary_key} =",
-                f"                   :{key_host}",
                 "       END-EXEC.",
                 "       PERFORM DB2-CHECK-STATUS.",
             ]
         )
+
+        return "\n".join(lines)
 
     def commit_sql(
         self,
@@ -496,7 +494,6 @@ class DmlTransformer:
                 "       IF SQLCODE NOT = 0",
                 "          DISPLAY 'DB2 SQL ERROR SQLCODE=' SQLCODE",
                 "       END-IF.",
-                "",
             ]
         )
 
@@ -654,6 +651,11 @@ class DmlTransformer:
         )
 
         if not meta:
+            meta = field_map.get(
+                target.upper().replace("-", "_"),
+            )
+
+        if not isinstance(meta, dict):
             return None
 
         column = meta.get(
@@ -695,7 +697,7 @@ class DmlTransformer:
         if not normalized_target.startswith(prefix):
             return None
 
-        column_part = normalized_target[len(prefix):]
+        column_part = normalized_target[len(prefix) :]
         candidate = self.normalize_column_token(
             column_part,
         )
@@ -722,23 +724,69 @@ class DmlTransformer:
             if field_name.upper().replace("_", "-") == candidate_hyphen:
                 return field_name
 
+        candidate_compact = self.compact_name(
+            candidate,
+        )
+
+        for field_name in record_fields:
+            field_compact = self.compact_name(
+                field_name,
+            )
+
+            if field_compact == candidate_compact:
+                return field_name
+
         return None
 
-    def resolve_primary_key(
+    def resolve_primary_keys(
         self,
         logical_record_name: str,
         physical_record_name: str,
-    ) -> str | None:
+    ) -> list[str]:
         record = self.schema.records.get(
             physical_record_name,
         )
 
         if not record:
-            return None
+            return []
 
         record_fields = list(
             record.fields.keys(),
         )
+
+        calc_keys = self.primary_keys_from_calc_key_map(
+            logical_record_name=logical_record_name,
+            physical_record_name=physical_record_name,
+            record_fields=record_fields,
+        )
+
+        if calc_keys:
+            return calc_keys
+
+        if hasattr(record, "effective_primary_keys"):
+            effective = record.effective_primary_keys()
+        else:
+            effective = list(getattr(record, "primary_keys", []) or [])
+
+            if getattr(record, "primary_key", None):
+                if record.primary_key not in effective:
+                    effective.append(record.primary_key)
+
+        matched_effective = []
+
+        for key in effective:
+            matched = self.find_matching_column(
+                record_fields=record_fields,
+                candidate=self.normalize_column_token(key),
+            )
+
+            if matched:
+                matched_effective.append(
+                    matched,
+                )
+
+        if matched_effective:
+            return matched_effective
 
         preferred_id = self.preferred_id_column(
             logical_record_name=logical_record_name,
@@ -746,30 +794,88 @@ class DmlTransformer:
         )
 
         if preferred_id:
-            return preferred_id
-
-        calc_key = self.primary_key_from_calc_key_map(
-            logical_record_name=logical_record_name,
-            physical_record_name=physical_record_name,
-            record_fields=record_fields,
-        )
-
-        if calc_key:
-            return calc_key
-
-        if record.primary_key:
-            matched_primary_key = self.find_matching_column(
-                record_fields=record_fields,
-                candidate=self.normalize_column_token(record.primary_key),
-            )
-
-            if matched_primary_key:
-                return matched_primary_key
+            return [preferred_id]
 
         if record_fields:
-            return record_fields[0]
+            return [record_fields[0]]
 
-        return None
+        return []
+
+    def primary_keys_from_calc_key_map(
+        self,
+        logical_record_name: str,
+        physical_record_name: str,
+        record_fields: list[str],
+    ) -> list[str]:
+        calc_key_map = getattr(
+            self.schema,
+            "calc_key_map",
+            {},
+        )
+
+        possible_keys = [
+            logical_record_name.upper(),
+            logical_record_name.upper().replace("-", "_"),
+            physical_record_name.upper(),
+            physical_record_name.upper().replace("-", "_"),
+        ]
+
+        for key in possible_keys:
+            meta = calc_key_map.get(
+                key,
+            )
+
+            if not isinstance(meta, dict):
+                continue
+
+            raw_keys = []
+
+            if meta.get("primary_keys"):
+                raw_keys.extend(
+                    meta.get("primary_keys") or [],
+                )
+
+            for single_key_name in [
+                "key",
+                "primary_key",
+                "column",
+            ]:
+                value = meta.get(
+                    single_key_name,
+                )
+
+                if value:
+                    raw_keys.append(
+                        value,
+                    )
+
+            result = []
+            seen = set()
+
+            for raw_key in raw_keys:
+                matched = self.find_matching_column(
+                    record_fields=record_fields,
+                    candidate=self.normalize_column_token(str(raw_key)),
+                )
+
+                if not matched:
+                    continue
+
+                if matched in seen:
+                    continue
+
+                seen.add(
+                    matched,
+                )
+
+                result.append(
+                    matched,
+                )
+
+            if result:
+                return result
+
+        return []
 
     def preferred_id_column(
         self,
@@ -800,51 +906,72 @@ class DmlTransformer:
 
         return id_columns[0]
 
-    def primary_key_from_calc_key_map(
+    def where_items_for_primary_keys(
         self,
         logical_record_name: str,
-        physical_record_name: str,
-        record_fields: list[str],
-    ) -> str | None:
-        calc_key_map = getattr(
-            self.schema,
-            "calc_key_map",
-            {},
-        )
-
-        possible_keys = [
-            logical_record_name.upper(),
-            logical_record_name.upper().replace("-", "_"),
-            physical_record_name.upper(),
-            physical_record_name.upper().replace("-", "_"),
+        primary_keys: list[str],
+    ) -> list[str]:
+        return [
+            f"{primary_key} = :{Naming.hv(logical_record_name, primary_key)}"
+            for primary_key in primary_keys
         ]
 
-        for key in possible_keys:
-            meta = calc_key_map.get(
-                key,
+    def where_lines(
+        self,
+        where_items: list[str],
+        indent: str,
+    ) -> list[str]:
+        lines = []
+
+        for index, item in enumerate(where_items):
+            if index == 0:
+                lines.append(
+                    f"{indent}WHERE {item}"
+                )
+            else:
+                lines.append(
+                    f"{indent}  AND {item}"
+                )
+
+        return lines
+
+    def sql_assignment_lines(
+        self,
+        keyword: str,
+        items: list[str],
+        indent: str,
+    ) -> list[str]:
+        lines = []
+
+        for index, item in enumerate(items):
+            suffix = "," if index < len(items) - 1 else ""
+
+            if index == 0:
+                lines.append(
+                    f"{indent}{keyword} {item}{suffix}"
+                )
+            else:
+                lines.append(
+                    f"{indent}    {item}{suffix}"
+                )
+
+        return lines
+
+    def sql_list_lines(
+        self,
+        items: list[str],
+        indent: str,
+    ) -> list[str]:
+        lines = []
+
+        for index, item in enumerate(items):
+            suffix = "," if index < len(items) - 1 else ""
+
+            lines.append(
+                f"{indent}{item}{suffix}"
             )
 
-            if not meta:
-                continue
-
-            calc_key = (
-                meta.get("key")
-                or meta.get("primary_key")
-                or meta.get("column")
-            )
-
-            if not calc_key:
-                continue
-
-            matched = self.find_matching_column(
-                record_fields=record_fields,
-                candidate=self.normalize_column_token(str(calc_key)),
-            )
-
-            if matched:
-                return matched
-
-        return None
+        return lines
 
     def physical_record_name(
         self,
@@ -897,37 +1024,20 @@ class DmlTransformer:
         value: str,
     ) -> str:
         return (
-            value.upper()
+            str(value or "")
+            .upper()
             .strip()
             .rstrip(".")
             .replace("-", "_")
             .replace(" ", "_")
         )
 
-    def sql_list_lines(
+    def compact_name(
         self,
-        items: list[str],
-        indent: str,
-    ) -> list[str]:
-        lines: list[str] = []
-
-        for index, item in enumerate(items):
-            suffix = "," if index < len(items) - 1 else ""
-
-            lines.append(
-                f"{indent}{item}{suffix}",
-            )
-
-        return lines
-
-    def normalize_blank_lines(
-        self,
-        text: str,
+        value: str,
     ) -> str:
-        text = re.sub(
-            r"\n{3,}",
-            "\n\n",
-            text,
+        return re.sub(
+            r"[^A-Z0-9]",
+            "",
+            str(value or "").upper(),
         )
-
-        return text

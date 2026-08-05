@@ -6,13 +6,16 @@ class CobolCleanup:
     Final cleanup pass for generated COBOL.
 
     Goals:
-    - Preserve EXEC SQL blocks.
+    - Preserve DATA DIVISION and WORKING-STORAGE declarations.
     - Normalize PROCEDURE DIVISION formatting.
+    - Normalize EXEC SQL block indentation.
+    - Fix PERFORM ... UNTIL continuation indentation.
+    - Fix ELSE IF indentation.
     - Fix END-IF, ELSE, CONTINUE, EXIT, GOBACK indentation.
-    - Fix SQL indentation for common SQL clauses.
     - Fix READ ... AT END indentation.
-    - Fix paragraph header concatenation.
-    - Avoid changing DATA DIVISION and WORKING-STORAGE declarations.
+    - Trim trailing spaces and excessive blank lines.
+
+    This class intentionally avoids changing business/conversion logic.
     """
 
     EXEC_SQL_START = re.compile(
@@ -27,6 +30,11 @@ class CobolCleanup:
 
     PROCEDURE_DIVISION = re.compile(
         r"^\s*PROCEDURE\s+DIVISION\.",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+    DATA_DIVISION = re.compile(
+        r"^\s*DATA\s+DIVISION\.",
         re.IGNORECASE | re.MULTILINE,
     )
 
@@ -48,6 +56,9 @@ class CobolCleanup:
         self,
         text: str,
     ) -> str:
+        if not text:
+            return text
+
         text = self.fix_continue_concatenation(
             text,
         )
@@ -76,6 +87,14 @@ class CobolCleanup:
             text,
         )
 
+        text = self.normalize_perform_until(
+            text,
+        )
+
+        text = self.normalize_else_if(
+            text,
+        )
+
         text = self.normalize_sql_spacing(
             text,
         )
@@ -101,93 +120,70 @@ class CobolCleanup:
         if not match:
             return text
 
-        before = text[:match.start()]
-        procedure = text[match.start():]
+        before = text[: match.start()]
+        procedure = text[match.start() :]
 
-        procedure = self.normalize_lines(
-            procedure,
-        )
-
-        return before + procedure
-
-    def normalize_lines(
-        self,
-        text: str,
-    ) -> str:
-        lines = text.splitlines()
-        output: list[str] = []
-
+        lines = procedure.splitlines()
+        result = []
         in_exec_sql = False
 
         for line in lines:
             stripped = line.strip()
 
             if not stripped:
-                output.append("")
+                result.append("")
+                continue
+
+            if self.COMMENT_LINE.match(line):
+                result.append(stripped)
                 continue
 
             if self.EXEC_SQL_START.match(line):
                 in_exec_sql = True
-                output.append(
-                    "       EXEC SQL",
-                )
+                result.append("       EXEC SQL")
                 continue
 
             if in_exec_sql:
-                output.append(
-                    self.normalize_exec_sql_line(
+                if self.EXEC_SQL_END.match(line):
+                    result.append("       END-EXEC.")
+                    in_exec_sql = False
+                    continue
+
+                result.append(
+                    self.normalize_sql_line(
                         stripped,
                     )
                 )
-
-                if self.EXEC_SQL_END.match(line):
-                    in_exec_sql = False
-
                 continue
 
-            if self.COMMENT_LINE.match(line):
-                output.append(line)
-                continue
-
-            if self.DEBUG_DISPLAY_LINE.match(line):
-                output.append(stripped)
-                continue
-
-            if self.PARAGRAPH_HEADER.match(line):
-                output.append(stripped)
-                continue
-
-            output.append(
+            result.append(
                 self.normalize_procedure_line(
                     stripped,
                 )
             )
 
-        return "\n".join(output)
+        return before + "\n".join(result)
 
-    def normalize_exec_sql_line(
+    def normalize_sql_line(
         self,
         stripped: str,
     ) -> str:
         upper = stripped.upper()
 
+        if not stripped:
+            return ""
+
         if upper == "EXEC SQL":
             return "       EXEC SQL"
 
-        if upper in {
-            "END-EXEC",
-            "END-EXEC.",
-        }:
+        if upper in {"END-EXEC", "END-EXEC."}:
             return "       END-EXEC."
 
         if upper == "COMMIT":
             return "            COMMIT"
 
-        if upper in {
-            "(",
-            ")",
-        }:
-            return "               " + stripped
+        if upper in {"(", ")"}:
+            return "            " + stripped
 
         if stripped.startswith(":"):
             return "                " + stripped
@@ -211,7 +207,7 @@ class CobolCleanup:
             stripped,
             flags=re.IGNORECASE,
         ):
-            return "                " + stripped
+            return "            " + stripped
 
         if re.match(
             r"^(INTO|FROM|WHERE|ORDER\s+BY|FETCH\s+FIRST|SET|VALUES)\b",
@@ -219,6 +215,13 @@ class CobolCleanup:
             flags=re.IGNORECASE,
         ):
             return "            " + stripped
+
+        if re.match(
+            r"^AND\b",
+            stripped,
+            flags=re.IGNORECASE,
+        ):
+            return "              " + stripped
 
         if re.match(
             r"^[A-Z0-9_]+\s*=",
@@ -238,276 +241,67 @@ class CobolCleanup:
         if upper == "PROCEDURE DIVISION.":
             return "PROCEDURE DIVISION."
 
-        if upper in {
-            "END-IF",
-            "END-IF.",
-        }:
+        if self.PARAGRAPH_HEADER.match(stripped):
+            return stripped.upper()
+
+        if upper in {"END-IF", "END-IF."}:
             return "       END-IF."
 
-        if upper in {
-            "END-PERFORM",
-            "END-PERFORM.",
-        }:
+        if upper in {"END-PERFORM", "END-PERFORM."}:
             return "       END-PERFORM"
 
         if upper == "ELSE":
             return "       ELSE"
 
-        if upper in {
-            "CONTINUE",
-            "CONTINUE.",
-        }:
-            return "       CONTINUE."
+        if upper.startswith("ELSE IF "):
+            return "       " + stripped
 
-        if upper in {
-            "EXIT",
-            "EXIT.",
-        }:
-            return "       EXIT."
-
-        if upper in {
-            "GOBACK",
-            "GOBACK.",
-        }:
-            return "       GOBACK."
-
-        if upper == "THEN":
-            return "       THEN"
+        if upper.startswith("IF "):
+            return "       " + stripped
 
         if upper.startswith("THEN "):
+            return "          " + stripped
+
+        if upper.startswith("PERFORM "):
+            return "       " + stripped
+
+        if upper.startswith("UNTIL "):
+            return "           " + stripped
+
+        if upper.startswith("MOVE "):
+            return "       " + stripped
+
+        if upper.startswith("READ "):
             return "       " + stripped
 
         if upper.startswith("AT END "):
             return "          " + stripped
 
-        if upper.startswith("DISPLAY "):
-            return "          " + stripped
-
-        if self.is_common_procedure_statement(
-            upper,
-        ):
+        if upper.startswith("WRITE "):
             return "       " + stripped
 
-        return stripped
+        if upper.startswith("OPEN "):
+            return "       " + stripped
 
-    def is_common_procedure_statement(
-        self,
-        upper: str,
-    ) -> bool:
-        prefixes = (
-            "IF ",
-            "MOVE ",
-            "PERFORM ",
-            "READ ",
-            "WRITE ",
-            "OPEN ",
-            "CLOSE ",
-            "ADD ",
-            "SUBTRACT ",
-            "MULTIPLY ",
-            "DIVIDE ",
-            "COMPUTE ",
-            "GO TO ",
-            "SET ",
-            "CALL ",
-            "EVALUATE ",
-            "WHEN ",
-            "END-EVALUATE",
-            "PERFORM UNTIL ",
-        )
+        if upper.startswith("CLOSE "):
+            return "       " + stripped
 
-        return upper.startswith(prefixes)
+        if upper.startswith("DISPLAY "):
+            return "       " + stripped
 
-    def fix_db2_check_status(
-        self,
-        text: str,
-    ) -> str:
-        pattern = re.compile(
-            r"""
-            ^\s*DB2-CHECK-STATUS\.\s*
-            \n\s*IF\s+SQLCODE\s+NOT\s*=\s*0\s*
-            \n\s*DISPLAY\s+'DB2\s+SQL\s+ERROR\s+SQLCODE='\s+SQLCODE\s*
-            \n\s*END-IF\.?
-            """,
-            re.IGNORECASE | re.MULTILINE | re.VERBOSE,
-        )
+        if upper in {"CONTINUE", "CONTINUE."}:
+            return "       CONTINUE."
 
-        replacement = "\n".join(
-            [
-                "DB2-CHECK-STATUS.",
-                "       IF SQLCODE NOT = 0",
-                "          DISPLAY 'DB2 SQL ERROR SQLCODE=' SQLCODE",
-                "       END-IF.",
-            ]
-        )
+        if upper in {"EXIT", "EXIT."}:
+            return "       EXIT."
 
-        return pattern.sub(
-            replacement,
-            text,
-        )
+        if upper in {"GOBACK", "GOBACK."}:
+            return "       GOBACK."
 
-    def repair_read_at_end(
-        self,
-        text: str,
-    ) -> str:
-        lines = text.splitlines()
-        output: list[str] = []
+        if self.DEBUG_DISPLAY_LINE.match(stripped):
+            return "       " + stripped
 
-        in_exec_sql = False
-
-        for line in lines:
-            stripped = line.strip()
-
-            if self.EXEC_SQL_START.match(line):
-                in_exec_sql = True
-                output.append(line)
-                continue
-
-            if in_exec_sql:
-                output.append(line)
-
-                if self.EXEC_SQL_END.match(line):
-                    in_exec_sql = False
-
-                continue
-
-            if re.match(
-                r"^AT\s+END\b",
-                stripped,
-                flags=re.IGNORECASE,
-            ):
-                output.append(
-                    "          " + stripped,
-                )
-                continue
-
-            output.append(line)
-
-        return "\n".join(output)
-
-    def remove_end_processing_sqlcode_guard(
-        self,
-        text: str,
-    ) -> str:
-        pattern = re.compile(
-            r"""
-            (\n\s*END-PROCESSING\.\s*)
-            \n\s*IF\s+SQLCODE\s+NOT\s*=\s*0\s*
-            \n\s*PERFORM\s+SQL-ERROR\.?\s*
-            \n\s*END-IF\.?
-            """,
-            re.IGNORECASE | re.MULTILINE | re.VERBOSE,
-        )
-
-        return pattern.sub(
-            r"\1",
-            text,
-        )
-
-    def fix_paragraph_header_concatenation(
-        self,
-        text: str,
-    ) -> str:
-        replacements = [
-            r"EXEC\s+SQL",
-            r"IF\s+",
-            r"MOVE\s+",
-            r"PERFORM\s+",
-            r"CONTINUE\.?",
-            r"DISPLAY\s+",
-            r"READ\s+",
-            r"WRITE\s+",
-            r"OPEN\s+",
-            r"CLOSE\s+",
-        ]
-
-        for statement in replacements:
-            text = re.sub(
-                rf"(\b[A-Z0-9-]+\.)\s*({statement})",
-                r"\1\n       \2",
-                text,
-                flags=re.IGNORECASE,
-            )
-
-        return text
-
-    def fix_continue_concatenation(
-        self,
-        text: str,
-    ) -> str:
-        text = re.sub(
-            r"CONTINUE\.\s*PERFORM\s+IDMS-STATUS\.?",
-            "CONTINUE.",
-            text,
-            flags=re.IGNORECASE,
-        )
-
-        text = re.sub(
-            r"CONTINUE\.([A-Z0-9-]+\.)",
-            r"CONTINUE.\n\1",
-            text,
-            flags=re.IGNORECASE,
-        )
-
-        return text
-
-    def force_procedure_keyword_indentation(
-        self,
-        text: str,
-    ) -> str:
-        match = self.PROCEDURE_DIVISION.search(
-            text,
-        )
-
-        if not match:
-            return text
-
-        before = text[:match.start()]
-        procedure = text[match.start():]
-
-        procedure = re.sub(
-            r"(?im)^\s*END-IF\.?\s*$",
-            "       END-IF.",
-            procedure,
-        )
-
-        procedure = re.sub(
-            r"(?im)^\s*CONTINUE\.?\s*$",
-            "       CONTINUE.",
-            procedure,
-        )
-
-        procedure = re.sub(
-            r"(?im)^\s*ELSE\s*$",
-            "       ELSE",
-            procedure,
-        )
-
-        procedure = re.sub(
-            r"(?im)^\s*GOBACK\.?\s*$",
-            "       GOBACK.",
-            procedure,
-        )
-
-        procedure = re.sub(
-            r"(?im)^\s*EXIT\.?\s*$",
-            "       EXIT.",
-            procedure,
-        )
-
-        procedure = re.sub(
-            r"(?im)^\s*DISPLAY\s+'DB2 SQL ERROR SQLCODE='\s+SQLCODE\s*$",
-            "          DISPLAY 'DB2 SQL ERROR SQLCODE=' SQLCODE",
-            procedure,
-        )
-
-        procedure = re.sub(
-            r"(?im)^\s*PERFORM\s+SQL-ERROR\.?\s*$",
-            "          PERFORM SQL-ERROR",
-            procedure,
-        )
-
-        return before + procedure
+        return "       " + stripped
 
     def normalize_sql_spacing(
         self,
@@ -527,6 +321,164 @@ class CobolCleanup:
 
         return text
 
+    def normalize_perform_until(
+        self,
+        text: str,
+    ) -> str:
+        text = re.sub(
+            r"(?im)^\s*PERFORM\s+([A-Z0-9-]+)\s+THRU\s+([A-Z0-9-]+)\s*\n\s*UNTIL\s+(.+?)\.?\s*$",
+            r"       PERFORM \1 THRU \2\n           UNTIL \3.",
+            text,
+        )
+
+        text = re.sub(
+            r"(?im)^\s*PERFORM\s+([A-Z0-9-]+)\s*\n\s*UNTIL\s+(.+?)\.?\s*$",
+            r"       PERFORM \1\n           UNTIL \2.",
+            text,
+        )
+
+        return text
+
+    def normalize_else_if(
+        self,
+        text: str,
+    ) -> str:
+        return re.sub(
+            r"(?im)^\s*ELSE\s+IF\s+(.+)$",
+            r"       ELSE IF \1",
+            text,
+        )
+
+    def fix_db2_check_status(
+        self,
+        text: str,
+    ) -> str:
+        text = re.sub(
+            r"(?im)^\s*DB2-CHECK-STATUS\.\s*$",
+            "DB2-CHECK-STATUS.",
+            text,
+        )
+
+        text = re.sub(
+            r"(?im)^\s*IF\s+SQLCODE\s+NOT\s+=\s+0\s*$",
+            "       IF SQLCODE NOT = 0",
+            text,
+        )
+
+        text = re.sub(
+            r"(?im)^\s*DISPLAY\s+'DB2 SQL ERROR SQLCODE='\s+SQLCODE\s*$",
+            "          DISPLAY 'DB2 SQL ERROR SQLCODE=' SQLCODE",
+            text,
+        )
+
+        return text
+
+    def force_procedure_keyword_indentation(
+        self,
+        text: str,
+    ) -> str:
+        match = self.PROCEDURE_DIVISION.search(
+            text,
+        )
+
+        if not match:
+            return text
+
+        before = text[: match.start()]
+        procedure = text[match.start() :]
+
+        replacements = [
+            (
+                r"(?im)^\s*END-IF\.?\s*$",
+                "       END-IF.",
+            ),
+            (
+                r"(?im)^\s*ELSE\s*$",
+                "       ELSE",
+            ),
+            (
+                r"(?im)^\s*GOBACK\.?\s*$",
+                "       GOBACK.",
+            ),
+            (
+                r"(?im)^\s*EXIT\.?\s*$",
+                "       EXIT.",
+            ),
+            (
+                r"(?im)^\s*CONTINUE\.?\s*$",
+                "       CONTINUE.",
+            ),
+            (
+                r"(?im)^\s*PERFORM\s+SQL-ERROR\.?\s*$",
+                "       PERFORM SQL-ERROR",
+            ),
+        ]
+
+        for pattern, replacement in replacements:
+            procedure = re.sub(
+                pattern,
+                replacement,
+                procedure,
+            )
+
+        return before + procedure
+
+    def repair_read_at_end(
+        self,
+        text: str,
+    ) -> str:
+        text = re.sub(
+            r"(?im)^\s*READ\s+([A-Z0-9-]+)\s*$\n\s*AT\s+END\s+MOVE\s+(.+?)\s+TO\s+([A-Z0-9-]+)\.?\s*$",
+            r"       READ \1\n          AT END MOVE \2 TO \3.",
+            text,
+        )
+
+        return text
+
+    def remove_end_processing_sqlcode_guard(
+        self,
+        text: str,
+    ) -> str:
+        pattern = re.compile(
+            r"""
+            ^\s*END-PROCESSING\.\s*$
+            \s*IF\s+SQLCODE\s+NOT\s+=\s+0\s+AND\s+SQLCODE\s+NOT\s+=\s+100\s*$
+            \s*PERFORM\s+SQL-ERROR\s*$
+            \s*END-IF\.?\s*$
+            """,
+            re.IGNORECASE | re.MULTILINE | re.VERBOSE,
+        )
+
+        return pattern.sub(
+            "END-PROCESSING.",
+            text,
+        )
+
+    def fix_continue_concatenation(
+        self,
+        text: str,
+    ) -> str:
+        text = re.sub(
+            r"CONTINUE\.\s*([A-Z0-9-]+\.)",
+            r"CONTINUE.\n\1",
+            text,
+            flags=re.IGNORECASE,
+        )
+
+        return text
+
+    def fix_paragraph_header_concatenation(
+        self,
+        text: str,
+    ) -> str:
+        text = re.sub(
+            r"(\.)\s+([A-Z0-9-]+\.)",
+            r"\1\n\2",
+            text,
+        )
+
+        return text
+
     def normalize_blank_lines(
         self,
         text: str,
@@ -540,6 +492,24 @@ class CobolCleanup:
         text = re.sub(
             r"\n\s+\n",
             "\n\n",
+            text,
+        )
+
+        text = re.sub(
+            r"(?m)^(END-PROCESSING\.)\n\s*\n\s*(CLOSE\b)",
+            r"\1\n       \2",
+            text,
+        )
+
+        text = re.sub(
+            r"(?m)^(SQL-ERROR\.)\n\s*\n",
+            r"\1\n",
+            text,
+        )
+
+        text = re.sub(
+            r"(?m)^(SQL-ERROR-EXIT\.)\n\s*\n",
+            r"\1\n",
             text,
         )
 

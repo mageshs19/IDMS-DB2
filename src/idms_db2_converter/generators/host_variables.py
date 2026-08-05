@@ -1,3 +1,5 @@
+import re
+
 from idms_db2_converter.generators.naming import Naming
 from idms_db2_converter.models import SchemaModel
 
@@ -6,13 +8,18 @@ class HostVariableGenerator:
     """
     Generates COBOL host variables for DB2 embedded SQL.
 
-    Rules:
-    - Generates SQLCA.
-    - Generates BEGIN DECLARE SECTION and END DECLARE SECTION.
-    - Generates all columns for each used record.
-    - Uses Naming.normalize for group names and field names.
-    - Converts underscores to hyphens for COBOL data names.
-    - Generates null indicators for nullable columns.
+    Supports:
+    - CHAR(n)
+    - VARCHAR(n)
+    - DECIMAL(p)
+    - DECIMAL(p,s)
+    - DATE
+    - TIME
+    - TIMESTAMP
+
+    Schema Listing numeric rule:
+    - Numeric fields come through as DECIMAL.
+    - SMALLINT, INTEGER, BIGINT are normalized defensively to DECIMAL precision.
     """
 
     def generate(
@@ -21,6 +28,7 @@ class HostVariableGenerator:
         used_records: list[str],
     ) -> str:
         lines: list[str] = [
+            "",
             "       EXEC SQL",
             "            INCLUDE SQLCA",
             "       END-EXEC.",
@@ -43,6 +51,7 @@ class HostVariableGenerator:
                 continue
 
             record = schema.records[physical_record_name]
+
             logical_group_name = Naming.normalize(
                 logical_record_name,
             )
@@ -57,16 +66,22 @@ class HostVariableGenerator:
                     column_name,
                 )
 
+                datatype, length, scale = self.normalize_db2_datatype(
+                    datatype=getattr(column, "datatype", None),
+                    length=getattr(column, "length", None),
+                    scale=getattr(column, "scale", None),
+                )
+
                 lines.extend(
                     self.column_to_cobol(
                         hv=host_variable,
-                        datatype=column.datatype,
-                        length=column.length,
-                        scale=column.scale,
+                        datatype=datatype,
+                        length=length,
+                        scale=scale,
                     )
                 )
 
-                if column.nullable:
+                if getattr(column, "nullable", True):
                     null_indicator = Naming.ni(
                         logical_record_name,
                         column_name,
@@ -76,14 +91,11 @@ class HostVariableGenerator:
                         emitted_null_indicators.add(
                             null_indicator,
                         )
-
                         null_indicators.append(
                             f"     01 {null_indicator:<45} PIC S9(4) COMP."
                         )
 
-            lines.append(
-                "",
-            )
+            lines.append("")
 
         if null_indicators:
             lines.extend(
@@ -180,6 +192,79 @@ class HostVariableGenerator:
 
         return logical_record_name
 
+    def normalize_db2_datatype(
+        self,
+        datatype: str | None,
+        length: int | None,
+        scale: int | None,
+    ) -> tuple[str, int | None, int | None]:
+        value = str(datatype or "").strip().upper()
+
+        if not value:
+            return "CHAR", length, scale
+
+        decimal_match = re.match(
+            r"^(DECIMAL|NUMERIC|DEC)\s*$\s*(\d+)\s*(?:,\s*(\d+)\s*)?$$",
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        if decimal_match:
+            precision = int(decimal_match.group(2))
+            parsed_scale = int(decimal_match.group(3) or 0)
+
+            return "DECIMAL", precision, parsed_scale
+
+        char_match = re.match(
+            r"^(CHAR|CHARACTER)\s*$\s*(\d+)\s*$$",
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        if char_match:
+            return "CHAR", int(char_match.group(2)), scale
+
+        varchar_match = re.match(
+            r"^(VARCHAR|LONG VARCHAR)\s*$\s*(\d+)\s*$$",
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        if varchar_match:
+            return "VARCHAR", int(varchar_match.group(2)), scale
+
+        if value in {"VARCHAR", "LONG VARCHAR"}:
+            return "VARCHAR", self.safe_int(length, 255), scale
+
+        if value in {"CHAR", "CHARACTER"}:
+            return "CHAR", self.safe_int(length, 1), scale
+
+        if value in {"DECIMAL", "NUMERIC", "DEC"}:
+            return "DECIMAL", self.safe_int(length, 18), self.safe_int(scale, 0)
+
+        if value == "SMALLINT":
+            return "DECIMAL", 4, 0
+
+        if value in {"INTEGER", "INT"}:
+            return "DECIMAL", 9, 0
+
+        if value == "BIGINT":
+            return "DECIMAL", 18, 0
+
+        if value == "DATE":
+            return "DATE", None, None
+
+        if value == "TIME":
+            return "TIME", None, None
+
+        if value == "TIMESTAMP":
+            return "TIMESTAMP", None, None
+
+        if value in {"DOUBLE", "FLOAT", "REAL"}:
+            return value, None, None
+
+        return value, length, scale
+
     def column_to_cobol(
         self,
         hv: str,
@@ -196,69 +281,76 @@ class HostVariableGenerator:
             "CHAR",
             "CHARACTER",
         }:
+            actual_length = self.safe_int(
+                length,
+                1,
+            )
+
             return [
-                f"        05 {hv:<45} PIC X({length or 1})."
+                f"        05 {hv:<45} PIC X({actual_length})."
             ]
 
         if datatype in {
             "VARCHAR",
             "LONG VARCHAR",
         }:
+            actual_length = self.safe_int(
+                length,
+                255,
+            )
+
             return [
-                f"        05 {hv:<45} PIC X({length or 255})."
+                f"        05 {hv:<45} PIC X({actual_length})."
             ]
 
-        if datatype in {
-            "DATE",
-        }:
+        if datatype == "DATE":
             return [
                 f"        05 {hv:<45} PIC X(10)."
             ]
 
-        if datatype in {
-            "TIME",
-        }:
+        if datatype == "TIME":
             return [
                 f"        05 {hv:<45} PIC X(8)."
             ]
 
-        if datatype in {
-            "TIMESTAMP",
-        }:
+        if datatype == "TIMESTAMP":
             return [
                 f"        05 {hv:<45} PIC X(26)."
             ]
 
         if datatype in {
-            "SMALLINT",
-        }:
-            return [
-                f"        05 {hv:<45} PIC S9(4) COMP."
-            ]
-
-        if datatype in {
-            "INTEGER",
-            "INT",
-        }:
-            return [
-                f"        05 {hv:<45} PIC S9(9) COMP."
-            ]
-
-        if datatype in {
-            "BIGINT",
-        }:
-            return [
-                f"        05 {hv:<45} PIC S9(18) COMP-3."
-            ]
-
-        if datatype in {
             "DECIMAL",
             "NUMERIC",
+            "DEC",
         }:
             return self.decimal_to_cobol(
                 hv=hv,
                 precision=length,
                 scale=scale,
+            )
+
+        if datatype == "SMALLINT":
+            return self.decimal_to_cobol(
+                hv=hv,
+                precision=4,
+                scale=0,
+            )
+
+        if datatype in {
+            "INTEGER",
+            "INT",
+        }:
+            return self.decimal_to_cobol(
+                hv=hv,
+                precision=9,
+                scale=0,
+            )
+
+        if datatype == "BIGINT":
+            return self.decimal_to_cobol(
+                hv=hv,
+                precision=18,
+                scale=0,
             )
 
         if datatype in {
@@ -270,8 +362,13 @@ class HostVariableGenerator:
                 f"        05 {hv:<45} COMP-2."
             ]
 
+        actual_length = self.safe_int(
+            length,
+            255,
+        )
+
         return [
-            f"        05 {hv:<45} PIC X({length or 255})."
+            f"        05 {hv:<45} PIC X({actual_length})."
         ]
 
     def decimal_to_cobol(
@@ -280,16 +377,14 @@ class HostVariableGenerator:
         precision: int | None,
         scale: int | None,
     ) -> list[str]:
-        actual_precision = (
-            precision
-            if precision is not None
-            else 18
+        actual_precision = self.safe_int(
+            precision,
+            18,
         )
 
-        actual_scale = (
-            scale
-            if scale is not None
-            else 0
+        actual_scale = self.safe_int(
+            scale,
+            0,
         )
 
         integer_digits = max(
@@ -305,3 +400,21 @@ class HostVariableGenerator:
         return [
             f"        05 {hv:<45} PIC S9({actual_precision}) COMP-3."
         ]
+
+    def safe_int(
+        self,
+        value,
+        default: int,
+    ) -> int:
+        try:
+            if value is None:
+                return default
+
+            text = str(value).strip()
+
+            if not text:
+                return default
+
+            return int(text)
+        except Exception:
+            return default
