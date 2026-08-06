@@ -7,15 +7,13 @@ class CobolCleanup:
 
     Goals:
     - Preserve DATA DIVISION and WORKING-STORAGE declarations.
+    - Normalize all EXEC SQL blocks, including declarations before PROCEDURE DIVISION.
     - Normalize PROCEDURE DIVISION formatting.
-    - Normalize EXEC SQL block indentation.
+    - Fix IF / ELSE / ELSE IF / END-IF indentation.
     - Fix PERFORM ... UNTIL continuation indentation.
-    - Fix ELSE IF indentation.
-    - Fix END-IF, ELSE, CONTINUE, EXIT, GOBACK indentation.
     - Fix READ ... AT END indentation.
-    - Trim trailing spaces and excessive blank lines.
-
-    This class intentionally avoids changing business/conversion logic.
+    - Fix paragraph header concatenation.
+    - Avoid changing business logic.
     """
 
     EXEC_SQL_START = re.compile(
@@ -75,6 +73,10 @@ class CobolCleanup:
             text,
         )
 
+        text = self.normalize_all_exec_sql_blocks(
+            text,
+        )
+
         text = self.normalize_procedure_division(
             text,
         )
@@ -95,6 +97,14 @@ class CobolCleanup:
             text,
         )
 
+        text = self.normalize_then_lines(
+            text,
+        )
+
+        text = self.normalize_nested_move_perform_after_if(
+            text,
+        )
+
         text = self.normalize_sql_spacing(
             text,
         )
@@ -108,6 +118,48 @@ class CobolCleanup:
         )
 
         return text
+
+    def normalize_all_exec_sql_blocks(
+        self,
+        text: str,
+    ) -> str:
+        lines = text.splitlines()
+        result = []
+        in_exec_sql = False
+
+        for line in lines:
+            stripped = line.strip()
+
+            if not stripped:
+                if in_exec_sql:
+                    result.append("")
+                else:
+                    result.append(line.rstrip())
+                continue
+
+            if self.EXEC_SQL_START.match(line):
+                in_exec_sql = True
+                result.append("       EXEC SQL")
+                continue
+
+            if in_exec_sql:
+                if self.EXEC_SQL_END.match(line):
+                    result.append("       END-EXEC.")
+                    in_exec_sql = False
+                    continue
+
+                result.append(
+                    self.normalize_sql_line(
+                        stripped,
+                    )
+                )
+                continue
+
+            result.append(
+                line.rstrip()
+            )
+
+        return "\n".join(result)
 
     def normalize_procedure_division(
         self,
@@ -241,14 +293,11 @@ class CobolCleanup:
         if upper == "PROCEDURE DIVISION.":
             return "PROCEDURE DIVISION."
 
-        if self.PARAGRAPH_HEADER.match(stripped):
-            return stripped.upper()
-
         if upper in {"END-IF", "END-IF."}:
             return "       END-IF."
 
         if upper in {"END-PERFORM", "END-PERFORM."}:
-            return "       END-PERFORM"
+            return "       END-PERFORM."
 
         if upper == "ELSE":
             return "       ELSE"
@@ -301,6 +350,9 @@ class CobolCleanup:
         if self.DEBUG_DISPLAY_LINE.match(stripped):
             return "       " + stripped
 
+        if self.PARAGRAPH_HEADER.match(stripped):
+            return stripped.upper()
+
         return "       " + stripped
 
     def normalize_sql_spacing(
@@ -348,6 +400,70 @@ class CobolCleanup:
             r"       ELSE IF \1",
             text,
         )
+
+    def normalize_then_lines(
+        self,
+        text: str,
+    ) -> str:
+        text = re.sub(
+            r"(?im)^\s*THEN\s+MOVE\s+(.+)$",
+            r"          THEN MOVE \1",
+            text,
+        )
+
+        text = re.sub(
+            r"(?im)^\s*THEN\s+ADD\s+(.+)$",
+            r"          THEN ADD \1",
+            text,
+        )
+
+        text = re.sub(
+            r"(?im)^\s*THEN\s+PERFORM\s+(.+)$",
+            r"          THEN PERFORM \1",
+            text,
+        )
+
+        return text
+
+    def normalize_nested_move_perform_after_if(
+        self,
+        text: str,
+    ) -> str:
+        lines = text.splitlines()
+        result = []
+
+        previous_control = False
+
+        for line in lines:
+            stripped = line.strip()
+            upper = stripped.upper()
+
+            if not stripped:
+                result.append(line)
+                continue
+
+            if re.match(
+                r"^\s*(IF|ELSE|ELSE IF)\b",
+                line,
+                flags=re.IGNORECASE,
+            ):
+                previous_control = True
+                result.append(line)
+                continue
+
+            if previous_control and re.match(
+                r"^(MOVE|PERFORM|CONTINUE|DISPLAY)\b",
+                upper,
+                flags=re.IGNORECASE,
+            ):
+                result.append("          " + stripped)
+                previous_control = False
+                continue
+
+            previous_control = False
+            result.append(line)
+
+        return "\n".join(result)
 
     def fix_db2_check_status(
         self,
